@@ -34,7 +34,7 @@ export default function OmniChannelMockup() {
         
         {/* Section Title */}
         <div className="text-center max-w-3xl mx-auto space-y-4 mb-12">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sapphire-900/80 border border-cyan-bright/30 text-cyan-bright text-xs font-bold uppercase tracking-wider">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full glass-badge text-xs font-bold uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Infraestructura Omnicanal en Tiempo Real</span>
           </span>
@@ -117,7 +117,7 @@ export default function OmniChannelMockup() {
           <div className="absolute inset-0 p-4 sm:p-8 md:p-10 flex flex-col justify-between pointer-events-none">
             
             {/* Top Left Floating Chat: Patient Message */}
-            <div className="self-start max-w-xs sm:max-w-sm rounded-2xl p-4 bg-sapphire-950/80 border border-white/20 backdrop-blur-xl shadow-xl space-y-1.5 animate-float pointer-events-auto">
+            <div className="self-start max-w-xs sm:max-w-sm rounded-2xl p-4 bg-sapphire-950/80 border border-white/20 backdrop-blur-xl shadow-xl space-y-1.5 animate-float gpu-layer pointer-events-auto">
               <div className="flex items-center justify-between text-[11px] text-slate-400 font-semibold">
                 <span className="flex items-center gap-1.5 text-emerald-400">
                   <Smartphone className="w-3.5 h-3.5" /> Paciente vía WhatsApp
@@ -130,7 +130,7 @@ export default function OmniChannelMockup() {
             </div>
 
             {/* Bottom Right Floating Chat: Agent Intelligent Resolution */}
-            <div className="self-end max-w-xs sm:max-w-md rounded-2xl p-4 bg-sapphire-900/90 border border-cyan-bright/40 backdrop-blur-xl shadow-2xl space-y-2 pointer-events-auto">
+            <div className="self-end max-w-xs sm:max-w-md rounded-2xl p-4 bg-sapphire-900/90 border border-cyan-bright/40 backdrop-blur-xl shadow-2xl space-y-2 gpu-layer pointer-events-auto">
               <div className="flex items-center justify-between text-[11px] text-cyan-bright font-bold">
                 <span className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-cyan-bright animate-ping" />

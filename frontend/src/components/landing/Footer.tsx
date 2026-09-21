@@ -84,7 +84,7 @@ export default function Footer() {
         </div>
 
         {/* Ethical Sanitary & Medical Disclaimer (WCAG 2.1 AA Compliant) */}
-        <div className="p-4 rounded-2xl bg-sapphire-900/40 border border-white/10 flex items-start gap-3 text-slate-300 text-[11px] leading-relaxed">
+        <div className="p-4 rounded-2xl glass-card flex items-start gap-3 text-slate-300 text-[11px] leading-relaxed">
           <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <p>
             <strong className="text-white">Aviso Médico Sanitario Obligatorio:</strong> La información, estimaciones de costos y orientación preliminar provistas por nuestros canales de inteligencia artificial tienen fines organizativos y de triaje previo. No constituyen un diagnóstico médico vinculante ni prescripción de medicamentos. El plan de tratamiento y diagnóstico definitivo se establecen exclusivamente en la evaluación clínica odontológica presencial.
@@ -92,7 +92,7 @@ export default function Footer() {
         </div>
 
         {/* Copyright & Sign-off */}
-        <div className="pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-500 text-[11px]">
+        <div className="pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-400 text-[11px]">
           <p>© {new Date().getFullYear()} Lumina Dental Studio. Todos los derechos reservados.</p>
           <p className="flex items-center gap-1">
             Diseñado con precisión <Heart className="w-3 h-3 text-rose-500 fill-current" /> y tecnología multi-agente a costo $0 USD.

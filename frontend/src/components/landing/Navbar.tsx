@@ -9,13 +9,12 @@ export default function Navbar() {
     <header className="sticky top-4 z-50 max-w-6xl mx-auto px-4 sm:px-6 w-full">
       <nav 
         aria-label="Navegación principal"
-        className="backdrop-blur-xl bg-sapphire-950/70 border border-white/10 rounded-2xl px-4 sm:px-6 h-16 flex items-center justify-between shadow-glass-card shadow-sapphire-950/50"
+        className="glass-panel gpu-layer rounded-2xl px-4 sm:px-6 h-16 flex items-center justify-between shadow-sapphire-950/50"
       >
         {/* Brand Logo */}
         <Link 
           href="/" 
           className="flex items-center gap-2.5 group focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-bright rounded-lg"
-          aria-label="Lumina Dental Studio - Inicio"
         >
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sapphire-800 to-cyan-bright/20 border border-cyan-bright/30 flex items-center justify-center text-cyan-bright group-hover:scale-105 transition-transform duration-200">
             <Stethoscope className="w-5 h-5 drop-shadow-[0_0_8px_rgba(0,229,255,0.6)]" />
@@ -66,7 +65,7 @@ export default function Navbar() {
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 bg-cyan-bright hover:bg-cyan-bright/90 text-sapphire-950 font-bold text-xs px-4 py-2 rounded-xl transition-all duration-200 shadow-cyan-glow hover:scale-102 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-            aria-label="Abrir chat de WhatsApp para consultar o agendar cita"
+            aria-label="WhatsApp 24/7 - Consultar o agendar turno"
           >
             <MessageCircle className="w-4 h-4 fill-current" />
             <span className="hidden sm:inline">WhatsApp 24/7</span>

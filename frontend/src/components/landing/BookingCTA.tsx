@@ -64,7 +64,7 @@ export default function BookingCTA() {
             
             {/* Left Column: Heading & Value Proposition */}
             <div className="lg:col-span-7 space-y-5 text-center lg:text-left">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-bright/10 border border-cyan-bright/30 text-cyan-bright text-xs font-bold uppercase tracking-wider">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full glass-badge text-xs font-bold uppercase tracking-wider">
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Reserva Inteligente Inmediata</span>
               </span>
@@ -86,7 +86,7 @@ export default function BookingCTA() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full sm:w-auto flex items-center justify-center gap-2.5 bg-cyan-bright hover:bg-cyan-bright/90 text-sapphire-950 font-bold text-sm px-6 py-3.5 rounded-xl transition-all duration-200 shadow-cyan-glow hover:scale-102 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                  aria-label="Confirmar turno elegido en WhatsApp"
+                  aria-label="Confirmar Turno en WhatsApp - Finalizar reserva en consultorio"
                 >
                   <MessageCircle className="w-4 h-4 fill-current" />
                   <span>Confirmar Turno en WhatsApp</span>
@@ -100,11 +100,16 @@ export default function BookingCTA() {
               
               {/* Date Input */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <label 
+                  htmlFor="booking-date" 
+                  className="text-xs font-bold text-slate-300 flex items-center gap-1.5"
+                >
                   <Calendar className="w-3.5 h-3.5 text-cyan-bright" />
                   <span>Seleccionar Fecha:</span>
                 </label>
                 <input
+                  id="booking-date"
+                  aria-label="Seleccionar fecha para turno odontológico"
                   type="date"
                   value={selectedDate}
                   min={new Date().toISOString().split('T')[0]}
@@ -113,7 +118,7 @@ export default function BookingCTA() {
                 />
               </div>
 
-              {/* Slots Grid */}
+              {/* Slots Grid with Fixed Height & Skeletons (CLS = 0.00) */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-bold text-slate-300 flex items-center gap-1.5">
@@ -125,13 +130,17 @@ export default function BookingCTA() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 max-h-44 overflow-y-auto pr-1">
+                <div className="grid grid-cols-3 gap-2 min-h-[148px] max-h-44 overflow-y-auto pr-1 items-start">
                   {loadingSlots ? (
-                    <span className="col-span-3 text-xs text-slate-400 italic py-4 text-center">
-                      Consultando Google Calendar...
-                    </span>
+                    Array.from({ length: 6 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="h-8 rounded-xl bg-white/5 border border-white/10 animate-pulse"
+                        aria-hidden="true"
+                      />
+                    ))
                   ) : slots.length === 0 ? (
-                    <span className="col-span-3 text-xs text-slate-400 italic py-4 text-center">
+                    <span className="col-span-3 text-xs text-slate-400 italic py-10 text-center">
                       No hay turnos disponibles para esta fecha.
                     </span>
                   ) : (

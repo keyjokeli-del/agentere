@@ -54,7 +54,7 @@ export default function Features() {
         
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto space-y-4 mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-bright/10 border border-cyan-bright/30 text-cyan-bright text-xs font-bold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass-badge text-xs font-bold uppercase tracking-wider">
             <Zap className="w-3.5 h-3.5" />
             <span>Innovación al Servicio del Paciente</span>
           </div>
@@ -77,7 +77,7 @@ export default function Features() {
             return (
               <div
                 key={feat.id}
-                className={`group relative rounded-3xl p-7 bg-sapphire-900/30 border border-white/10 hover:border-cyan-bright/40 backdrop-blur-xl transition-all duration-300 shadow-glass-card hover:-translate-y-1 overflow-hidden ${feat.glowColor}`}
+                className={`group relative rounded-3xl p-7 glass-card gpu-layer hover:border-cyan-bright/40 transition-all duration-300 hover:-translate-y-1 overflow-hidden ${feat.glowColor}`}
               >
                 {/* Subtle Inner Glow on Hover */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-bright/5 rounded-full blur-2xl group-hover:bg-cyan-bright/15 transition-all duration-500 pointer-events-none" />

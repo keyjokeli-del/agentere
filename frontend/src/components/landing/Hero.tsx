@@ -21,7 +21,7 @@ export default function Hero() {
           <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
             
             {/* Value Badge */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-sapphire-900/60 border border-cyan-bright/30 text-cyan-bright text-xs font-semibold backdrop-blur-md shadow-glass-card">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-badge text-xs font-semibold">
               <Sparkles className="w-3.5 h-3.5 animate-pulse" />
               <span>Odontología de Precisión & Asistente IA 24/7</span>
             </div>
@@ -46,7 +46,7 @@ export default function Hero() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full sm:w-auto flex items-center justify-center gap-2.5 bg-cyan-bright hover:bg-cyan-bright/90 text-sapphire-950 font-bold text-sm px-6 py-3.5 rounded-xl transition-all duration-200 shadow-cyan-glow hover:scale-102 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                aria-label="Chatear con el asistente clínico en WhatsApp y reservar turno"
+                aria-label="Agendar por WhatsApp - Chatear con el asistente clínico y reservar turno"
               >
                 <MessageCircle className="w-4 h-4 fill-current" />
                 <span>Agendar por WhatsApp</span>
@@ -91,11 +91,11 @@ export default function Hero() {
           <div className="lg:col-span-5 flex justify-center">
             <div className="relative w-full max-w-[420px] aspect-square flex items-center justify-center">
               
-              {/* Radial Halo Behind Mascot */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-cyan-bright/25 via-sapphire-900/40 to-transparent rounded-full blur-2xl -z-10 animate-pulse" />
+              {/* Radial Halo Behind Mascot (Static to eliminate continuous rasterization) */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-cyan-bright/25 via-sapphire-900/40 to-transparent rounded-full blur-2xl -z-10" />
               
               {/* Floating Glass Container */}
-              <div className="relative w-full h-full rounded-3xl border border-cyan-bright/20 bg-sapphire-900/30 backdrop-blur-md p-6 flex flex-col items-center justify-between shadow-glass-card group overflow-hidden">
+              <div className="relative w-full h-full rounded-3xl border border-cyan-bright/20 glass-card gpu-layer p-6 flex flex-col items-center justify-between group overflow-hidden">
                 
                 {/* Decorative Top Pill */}
                 <div className="w-full flex items-center justify-between text-[11px] font-semibold text-slate-400 border-b border-white/10 pb-3">
