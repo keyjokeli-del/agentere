@@ -9,6 +9,12 @@
 [![Vercel](https://img.shields.io/badge/Vercel-Production-black?style=flat&logo=vercel)](https://vercel.com/)
 [![License](https://img.shields.io/badge/Costo-0_USD_Mensual-emerald)](https://github.com/keyjokeli-del/agentere)
 
+> 🚀 **Despliegue en Vivo en Producción ($0 USD):**
+> - **Sitio Web & Landing Page (Vercel):** [https://lumina-dental-nairoby-dominguez.vercel.app](https://lumina-dental-nairoby-dominguez.vercel.app)
+> - **Portal Clínico & Dashboard (Vercel):** [https://lumina-dental-nairoby-dominguez.vercel.app/dashboard](https://lumina-dental-nairoby-dominguez.vercel.app/dashboard)
+> - **API Backend & Swagger (Render):** [https://lumina-backend-rti9.onrender.com/docs](https://lumina-backend-rti9.onrender.com/docs)
+> - **Servicio de WhatsApp Baileys (Render):** [https://lumina-whatsapp.onrender.com](https://lumina-whatsapp.onrender.com)
+
 Sistema integral de atención automatizada a pacientes y reserva inteligente de citas odontológicas 24/7 en tiempo real. Soporta **WhatsApp (Baileys sin costo de API)**, **Facebook Messenger**, **Instagram Direct** y **YouTube**, integrado directamente con **Google Calendar** para prevención estricta de solapamientos (turnos dedicados de 45 minutos), con persistencia criptográfica en **Neon Serverless Postgres** y un panel de administración y Landing Page clínica de alta conversión construidos en **Next.js 15**.
 
 ---
