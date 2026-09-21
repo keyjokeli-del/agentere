@@ -160,13 +160,13 @@ agentere/
    - `NEXT_PUBLIC_WHATSAPP_URL`: `https://lumina-whatsapp.onrender.com`
 5. Haz clic en **Deploy**. Tu Landing Page y Panel estarán publicados en `https://lumina-dental.vercel.app`.
 
-### Paso 6: Mantener los Contenedores Activos 24/7 (Cero Sleep)
+### Paso 6: Mantener los Contenedores Activos 24/7 (Cero Sleep con UptimeRobot)
 Los servicios web en el plan gratuito de Render se suspenden tras 15 minutos sin tráfico entrante. Para mantenerlos despiertos 24/7 sin pagar un solo centavo:
 1. Crea una cuenta gratuita en [UptimeRobot.com](https://uptimerobot.com).
-2. Añade 2 monitores tipo **HTTP(s)** con intervalo de **14 minutos**:
-   - Monitor 1: `https://lumina-backend.onrender.com/`
-   - Monitor 2: `https://lumina-whatsapp.onrender.com/api/status`
-3. Esto garantizará que ambos servicios permanezcan calientes y respondan a los mensajes de WhatsApp en menos de 2 segundos.
+2. Añade 2 monitores tipo **HTTP(s)** con intervalo de **5 a 14 minutos**:
+   - **Monitor 1 (Backend Core):** `https://lumina-backend-rti9.onrender.com/docs`
+   - **Monitor 2 (WhatsApp Bridge):** `https://lumina-whatsapp.onrender.com/api/status`
+3. Ambos monitores ejecutan chequeos periódicos con respuestas `200 OK`, manteniendo en memoria caliente los contenedores en Render de forma ininterrumpida y garantizando respuestas a mensajes en menos de 2 segundos.
 
 ---
 
