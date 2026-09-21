@@ -3,8 +3,9 @@ from pathlib import Path
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-# Load .env file if present
+# Load .env file if present (checks project root first, then backend/)
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR.parent / ".env")
 load_dotenv(BASE_DIR / ".env")
 
 class ClinicSettings(BaseModel):
