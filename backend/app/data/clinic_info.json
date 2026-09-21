@@ -1,0 +1,54 @@
+{
+  "treatments": [
+    {
+      "name": "Limpieza Dental y Profilaxis con Ultrasonido",
+      "duration_min": 45,
+      "price_range": "$30 - $45 USD",
+      "description": "Eliminación completa de sarro, placa bacteriana y pulido dental para prevenir caries y gingivitis."
+    },
+    {
+      "name": "Blanqueamiento Dental LED",
+      "duration_min": 60,
+      "price_range": "$90 - $150 USD",
+      "description": "Aclara hasta 4 tonos en una sola sesión de forma segura y sin dañar el esmalte dental."
+    },
+    {
+      "name": "Ortodoncia (Brackets Metálicos / Estéticos / Invisibles)",
+      "duration_min": 45,
+      "price_range": "Evaluación diagnóstica sin costo inicial. Planes desde $40 USD/mes",
+      "description": "Alineación de dientes y corrección de mordida tanto para adolescentes como adultos."
+    },
+    {
+      "name": "Implantes Dentales de Titanio",
+      "duration_min": 60,
+      "price_range": "$350 - $600 USD por pieza",
+      "description": "Reemplazo de piezas dentales perdidas con tornillo de titanio biocompatible y corona de alta estética."
+    },
+    {
+      "name": "Endodoncia (Tratamiento de Conducto)",
+      "duration_min": 60,
+      "price_range": "$80 - $140 USD",
+      "description": "Eliminación de la infección del nervio dental conservando la pieza dental natural."
+    },
+    {
+      "name": "Extracción Simple y Muelas del Juicio",
+      "duration_min": 45,
+      "price_range": "$35 - $90 USD",
+      "description": "Procedimiento indoloro con anestesia local para retirar piezas dañadas o terceros molares impactados."
+    }
+  ],
+  "general_faqs": [
+    {
+      "question": "¿Aceptan seguros médicos?",
+      "answer": "Trabajamos con las principales aseguradoras y ofrecemos facilidades de pago en cuotas sin interés."
+    },
+    {
+      "question": "¿Qué hago si tengo una urgencia o dolor dental agudo?",
+      "answer": "Atendemos urgencias prioritarias en el día dentro de nuestro horario laboral de 09:00 a 19:00. Acude directamente o solicita cita inmediata."
+    },
+    {
+      "question": "¿Cuál es la política de citas?",
+      "answer": "Las citas pueden reprogramarse con al menos 4 horas de anticipación sin penalización."
+    }
+  ]
+}
