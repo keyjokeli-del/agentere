@@ -20,6 +20,9 @@ __pycache__/
 .env.local
 auth_info_baileys/
 whatsapp-service/auth_info_baileys/
+credentials.json
+backend/credentials.json
+*.json.key
 
 # Logs
 *.log

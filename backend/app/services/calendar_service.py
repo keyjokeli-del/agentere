@@ -31,21 +31,27 @@ class CalendarService:
                 print(f"[CalendarService] Aviso: Error cargando GOOGLE_CREDENTIALS_JSON ({e}). Probando archivo local...")
 
         creds_file = settings.google_credentials_file
-        if os.path.exists(creds_file):
+        candidate_paths = [
+            creds_file,
+            os.path.join(settings.BASE_DIR, creds_file),
+            os.path.join(str(settings.BASE_DIR.parent), creds_file)
+        ]
+        resolved_file = next((p for p in candidate_paths if os.path.exists(p)), None)
+        if resolved_file:
             try:
                 from google.oauth2 import service_account
                 from googleapiclient.discovery import build
                 
-                with open(creds_file, "r") as f:
+                with open(resolved_file, "r") as f:
                     data = json.load(f)
                     
                 if "type" in data and data["type"] == "service_account":
                     credentials = service_account.Credentials.from_service_account_file(
-                        creds_file,
+                        resolved_file,
                         scopes=["https://www.googleapis.com/auth/calendar"]
                     )
                     self.service = build("calendar", "v3", credentials=credentials)
-                    print("[CalendarService] Google Calendar API conectado con éxito mediante Service Account.")
+                    print(f"[CalendarService] Google Calendar API conectado con éxito desde {resolved_file}.")
             except Exception as e:
                 print(f"[CalendarService] Aviso: No se pudo conectar a Google Calendar API ({e}). Usando almacén local.")
         else:
