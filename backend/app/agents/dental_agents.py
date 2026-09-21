@@ -5,7 +5,16 @@ from datetime import datetime, date, timedelta, timezone
 from app.config import settings
 from app.services.groq_service import groq_service
 from app.services.calendar_service import calendar_service
-from app.models.dental_models import ClinicCatalog, Treatment, GeneralFAQ, TriageResult, AgentResponse
+from app.models.dental_models import (
+    ClinicCatalog,
+    Treatment,
+    GeneralFAQ,
+    TriageResult,
+    AgentResponse,
+    OmniChannelMessage,
+    ClinicalAnalysis,
+    SolverResponse
+)
 
 # Load and validate clinic knowledge base with Pydantic
 DATA_FILE = settings.BASE_DIR / "app" / "data" / "clinic_info.json"
@@ -28,78 +37,249 @@ except Exception as e:
     )
 
 
-class TriageAgent:
-    """Classifies user intent and extracts clinical and booking entities with Pydantic validation."""
+# ==============================================================================
+# AGENTE 1: ReaderAgent ("El que lee")
+# Ingesta payloads heterogéneos de redes sociales y los mapea a OmniChannelMessage
+# ==============================================================================
+class ReaderAgent:
+    """Agent 1: Ingests raw payloads from diverse social channels and maps to OmniChannelMessage."""
 
-    SYSTEM_PROMPT = """Eres el Agente de Triage y Recepción de {clinic_name}.
-Tu misión es clasificar el mensaje del paciente y extraer entidades clave.
-Devuelve EXCLUSIVAMENTE un objeto JSON válido con la siguiente estructura:
+    def read(self, payload: Any, channel: str = "web", default_sender: str = "unknown") -> OmniChannelMessage:
+        if channel == "whatsapp":
+            return self.from_whatsapp(payload if isinstance(payload, dict) else {"message": str(payload)})
+        elif channel in ("facebook", "instagram"):
+            return self.from_meta(payload if isinstance(payload, dict) else {"message": str(payload)}, channel=channel)
+        elif channel == "youtube":
+            return self.from_youtube(payload if isinstance(payload, dict) else {"message": str(payload)})
+        elif isinstance(payload, dict):
+            return self.from_dict(payload, channel=channel, default_sender=default_sender)
+        else:
+            return self.from_text(str(payload), channel=channel, sender_id=default_sender)
+
+    def from_whatsapp(self, payload: Dict[str, Any]) -> OmniChannelMessage:
+        sender_id = str(payload.get("sender_id") or "unknown_wa").strip()
+        text = str(payload.get("message") or payload.get("raw_text") or "").strip()
+        sender_name = str(payload.get("sender_name") or sender_id).strip()
+        return OmniChannelMessage(
+            channel="whatsapp",
+            sender_id=sender_id,
+            sender_name=sender_name or "Paciente",
+            raw_text=text,
+            metadata=payload.get("metadata", {})
+        )
+
+    def from_meta(self, payload: Dict[str, Any], channel: str = "facebook") -> OmniChannelMessage:
+        entries = payload.get("entry", [])
+        sender_id = "unknown_meta"
+        text = ""
+        metadata: Dict[str, Any] = {"object": payload.get("object", "page")}
+
+        if payload.get("object") == "instagram":
+            channel = "instagram"
+
+        if entries and isinstance(entries, list):
+            first_entry = entries[0]
+            messaging = first_entry.get("messaging", [])
+            if messaging and isinstance(messaging, list):
+                event = messaging[0]
+                sender_id = str(event.get("sender", {}).get("id") or "unknown_meta")
+                msg_obj = event.get("message", {})
+                text = str(msg_obj.get("text") or "").strip()
+                metadata["mid"] = msg_obj.get("mid")
+                metadata["recipient_id"] = event.get("recipient", {}).get("id")
+
+        if not text:
+            text = str(payload.get("message") or payload.get("text") or "").strip()
+        if sender_id == "unknown_meta" and payload.get("sender_id"):
+            sender_id = str(payload.get("sender_id"))
+
+        valid_channel = channel if channel in ("facebook", "instagram") else "facebook"
+        return OmniChannelMessage(
+            channel=valid_channel,
+            sender_id=sender_id,
+            sender_name=str(payload.get("sender_name") or "Usuario Meta"),
+            raw_text=text,
+            metadata=metadata
+        )
+
+    def from_youtube(self, payload: Dict[str, Any]) -> OmniChannelMessage:
+        snippet = payload.get("snippet", {})
+        top_level = snippet.get("topLevelComment", {}).get("snippet", snippet)
+
+        text = str(
+            top_level.get("textDisplay") or
+            top_level.get("textOriginal") or
+            payload.get("comment") or
+            payload.get("message") or
+            payload.get("text") or
+            ""
+        ).strip()
+        sender_name = str(
+            top_level.get("authorDisplayName") or
+            payload.get("author") or
+            payload.get("sender_name") or
+            "Comentarista de YouTube"
+        ).strip()
+        sender_id = str(
+            top_level.get("authorChannelId", {}).get("value") or
+            payload.get("author") or
+            payload.get("sender_id") or
+            "unknown_yt"
+        ).strip()
+
+        metadata = {
+            "video_id": snippet.get("videoId") or payload.get("video_id"),
+            "comment_id": payload.get("id") or payload.get("comment_id"),
+            "parent_id": snippet.get("parentId") or payload.get("parent_id")
+        }
+
+        return OmniChannelMessage(
+            channel="youtube",
+            sender_id=sender_id,
+            sender_name=sender_name,
+            raw_text=text,
+            metadata=metadata
+        )
+
+    def from_dict(self, payload: Dict[str, Any], channel: str = "web", default_sender: str = "unknown") -> OmniChannelMessage:
+        raw_text = str(payload.get("message") or payload.get("text") or payload.get("raw_text") or "").strip()
+        sender_id = str(payload.get("sender_id") or default_sender).strip()
+        sender_name = str(payload.get("sender_name") or "Paciente").strip()
+        ch = str(payload.get("channel") or channel).lower()
+        valid_ch = ch if ch in ("whatsapp", "facebook", "instagram", "youtube", "web") else "web"
+        return OmniChannelMessage(
+            channel=valid_ch,
+            sender_id=sender_id,
+            sender_name=sender_name,
+            raw_text=raw_text,
+            metadata=payload.get("metadata", {})
+        )
+
+    def from_text(self, text: str, channel: str = "web", sender_id: str = "user-web", sender_name: str = "Paciente") -> OmniChannelMessage:
+        valid_ch = channel if channel in ("whatsapp", "facebook", "instagram", "youtube", "web") else "web"
+        return OmniChannelMessage(
+            channel=valid_ch,
+            sender_id=sender_id,
+            sender_name=sender_name,
+            raw_text=text.strip(),
+            metadata={}
+        )
+
+
+# ==============================================================================
+# AGENTE 2: AnalyzerAgent ("El que ve el problema")
+# Diagnóstico clínico, extracción de entidades y clasificación de urgencia
+# ==============================================================================
+class AnalyzerAgent:
+    """Agent 2: Evaluates clinical context, detects patient's real problem, extracts entities, and classifies intent."""
+
+    SYSTEM_PROMPT = """Eres el Agente Analizador Clínico de {clinic_name}.
+Tu misión es analizar el mensaje del paciente y devolver EXCLUSIVAMENTE un JSON válido:
 {{
     "intent": "BOOK_APPOINTMENT" | "INQUIRE_PRICE_OR_TREATMENT" | "EMERGENCY_OR_PAIN" | "GENERAL_FAQ" | "GREETING",
+    "urgency": "high" | "normal",
+    "detected_problem": "descripción clínica del motivo de consulta o dolor",
     "extracted_name": string or null,
     "extracted_treatment": string or null,
-    "extracted_date": string or null (formato YYYY-MM-DD si es identificable, o relativo como 'mañana', 'lunes', etc.),
-    "extracted_time": string or null (formato HH:MM si es identificable),
-    "urgency": "high" | "normal",
-    "summary": "resumen breve de lo que necesita el paciente"
+    "extracted_date": string or null,
+    "extracted_time": string or null,
+    "summary": "resumen breve y estructurado"
 }}
 No incluyas texto fuera del JSON.
 """
 
-    def process(self, message: str, context: List[Dict[str, str]]) -> TriageResult:
+    def analyze(self, message: OmniChannelMessage, context: List[Dict[str, str]]) -> ClinicalAnalysis:
+        raw_text = message.raw_text
         prompt = self.SYSTEM_PROMPT.format(clinic_name=settings.clinic_name)
         messages = [
             {"role": "system", "content": prompt},
-            *context[-4:],  # Last few turns for context
-            {"role": "user", "content": f"Mensaje del paciente: '{message}'"}
+            *context[-4:],
+            {"role": "user", "content": f"Mensaje [{message.channel.upper()}] de {message.sender_name}: '{raw_text}'"}
         ]
+
         response_text = groq_service.chat_completion(messages, temperature=0.1, response_format={"type": "json_object"})
-        
+
         try:
             parsed = json.loads(response_text)
-            return TriageResult.model_validate(parsed)
+            return ClinicalAnalysis.model_validate(parsed)
         except Exception:
             # Deterministic rule-based fallback
-            msg_lower = message.lower()
+            msg_lower = raw_text.lower()
             if any(w in msg_lower for w in ["duel", "dol", "urgencia", "emergencia", "muela", "sangr", "inflam", "hinch", "rot", "quebr"]):
-                return TriageResult(
+                return ClinicalAnalysis(
                     intent="EMERGENCY_OR_PAIN",
+                    urgency="high",
+                    detected_problem="Dolor agudo o urgencia odontológica reportada",
                     extracted_name=None,
-                    extracted_treatment=None,
+                    extracted_treatment="Urgencia Dental",
                     extracted_date=None,
                     extracted_time=None,
-                    urgency="high",
-                    summary="El paciente reporta dolor o urgencia dental."
+                    summary="El paciente reporta dolor o urgencia médica."
                 )
             elif any(w in msg_lower for w in ["cita", "turno", "agend", "reserv", "hora"]):
-                return TriageResult(
+                return ClinicalAnalysis(
                     intent="BOOK_APPOINTMENT",
+                    urgency="normal",
+                    detected_problem="Solicitud de reserva de cita odontológica",
                     extracted_name=None,
                     extracted_treatment=None,
                     extracted_date=None,
                     extracted_time=None,
-                    urgency="normal",
                     summary="Solicitud para agendar un turno."
                 )
             elif any(w in msg_lower for w in ["precio", "cuanto", "sale", "cuesta", "costo", "valor"]):
-                return TriageResult(
+                return ClinicalAnalysis(
                     intent="INQUIRE_PRICE_OR_TREATMENT",
+                    urgency="normal",
+                    detected_problem="Consulta de aranceles y tratamientos disponibles",
                     extracted_name=None,
                     extracted_treatment=None,
                     extracted_date=None,
                     extracted_time=None,
-                    urgency="normal",
                     summary="Consulta sobre costos o procedimientos."
                 )
-            return TriageResult(
+            elif any(w in msg_lower for w in ["hola", "buen", "saludos", "buenas"]):
+                return ClinicalAnalysis(
+                    intent="GREETING",
+                    urgency="normal",
+                    detected_problem="Contacto inicial del paciente",
+                    extracted_name=None,
+                    extracted_treatment=None,
+                    extracted_date=None,
+                    extracted_time=None,
+                    summary="Saludo inicial del paciente."
+                )
+            return ClinicalAnalysis(
                 intent="GENERAL_FAQ",
+                urgency="normal",
+                detected_problem="Dudas generales sobre la clínica y servicios",
                 extracted_name=None,
                 extracted_treatment=None,
                 extracted_date=None,
                 extracted_time=None,
-                urgency="normal",
-                summary="Consulta general o saludo."
+                summary="Consulta general o institucional."
             )
+
+
+# Backward-compatible TriageAgent
+class TriageAgent:
+    """Legacy wrapper delegating to AnalyzerAgent."""
+    def __init__(self) -> None:
+        self.reader = ReaderAgent()
+        self.analyzer = AnalyzerAgent()
+
+    def process(self, message: str, context: List[Dict[str, str]]) -> TriageResult:
+        omni_msg = self.reader.from_text(message)
+        analysis = self.analyzer.analyze(omni_msg, context)
+        return TriageResult(
+            intent=analysis.intent,
+            extracted_name=analysis.extracted_name,
+            extracted_treatment=analysis.extracted_treatment,
+            extracted_date=analysis.extracted_date,
+            extracted_time=analysis.extracted_time,
+            urgency=analysis.urgency,
+            summary=analysis.summary
+        )
 
 
 class DentalFAQAgent:
@@ -146,11 +326,9 @@ class AppointmentAgent:
     """Manages slot checking and booking in Google Calendar."""
 
     def handle(self, user_message: str, triage_data: TriageResult, sender_id: str, channel: str) -> str:
-        # Determine target date
-        target_date = date.today() + timedelta(days=1)  # Default: tomorrow
+        target_date = date.today() + timedelta(days=1)
         extracted_date = triage_data.extracted_date
-        
-        # Check if user specified a date
+
         if extracted_date:
             try:
                 target_date = datetime.strptime(extracted_date, "%Y-%m-%d").date()
@@ -162,7 +340,6 @@ class AppointmentAgent:
         patient_name = triage_data.extracted_name or "Paciente"
         treatment = triage_data.extracted_treatment or "Evaluación Odontológica General"
 
-        # If user selected a specific time that is busy
         if extracted_time and not any(extracted_time in slot for slot in available_slots):
             slots_text = ", ".join(available_slots[:5]) if available_slots else "Sin horarios disponibles"
             return (
@@ -172,7 +349,6 @@ class AppointmentAgent:
                 f"Por favor indícame cuál te queda más cómodo para confirmarte la reserva."
             )
 
-        # If user selected a specific valid slot and confirmed
         if extracted_time and any(extracted_time in slot for slot in available_slots):
             match_slot = next(slot for slot in available_slots if extracted_time in slot)
             appt = calendar_service.create_appointment(
@@ -193,7 +369,6 @@ class AppointmentAgent:
                 f"Te esperamos unos 5 minutos antes. ¡Que tengas un excelente día!"
             )
 
-        # Propose slots
         slots_text = ", ".join(available_slots[:5]) if available_slots else "Sin horarios disponibles"
         return (
             f"📅 Para el día **{target_date.strftime('%Y-%m-%d')}** tenemos los siguientes horarios disponibles:\n"
@@ -202,13 +377,82 @@ class AppointmentAgent:
         )
 
 
-class DentalAgentCoordinator:
-    """Coordinates Triage, FAQ and Appointment agents, maintaining per-session memory."""
+# ==============================================================================
+# AGENTE 3: SolverAgent ("El que da la solución")
+# Decide la acción resolutiva, consulta agenda o catálogo y redacta la respuesta final
+# ==============================================================================
+class SolverAgent:
+    """Agent 3: Formulates the final empathetic solution based on diagnosis and channel."""
 
     def __init__(self) -> None:
-        self.triage = TriageAgent()
-        self.faq = DentalFAQAgent()
-        self.appointment = AppointmentAgent()
+        self.faq_agent = DentalFAQAgent()
+        self.appointment_agent = AppointmentAgent()
+
+    def solve(
+        self,
+        message: OmniChannelMessage,
+        analysis: ClinicalAnalysis,
+        context: List[Dict[str, str]]
+    ) -> SolverResponse:
+        intent = analysis.intent
+        channel = message.channel
+        sender_id = message.sender_id
+        user_text = message.raw_text
+
+        triage_bridge = TriageResult(
+            intent=analysis.intent,
+            extracted_name=analysis.extracted_name or message.sender_name,
+            extracted_treatment=analysis.extracted_treatment,
+            extracted_date=analysis.extracted_date,
+            extracted_time=analysis.extracted_time,
+            urgency=analysis.urgency,
+            summary=analysis.summary
+        )
+
+        action_taken = "responded"
+        responding_agent_name = "SolverAgent"
+
+        if intent == "BOOK_APPOINTMENT":
+            reply_text = self.appointment_agent.handle(user_text, triage_bridge, sender_id, channel)
+            action_taken = "calendar_booked" if "confirmada con éxito" in reply_text else "slots_proposed"
+            responding_agent_name = "SolverAgent (Calendar)"
+        elif intent == "EMERGENCY_OR_PAIN":
+            reply_text = self.faq_agent.generate_response(user_text, triage_bridge, context)
+            action_taken = "emergency_diverted"
+            responding_agent_name = "SolverAgent (Emergency)"
+        elif intent in ("INQUIRE_PRICE_OR_TREATMENT", "GENERAL_FAQ"):
+            reply_text = self.faq_agent.generate_response(user_text, triage_bridge, context)
+            action_taken = "faq_answered"
+            responding_agent_name = "SolverAgent (Clinical Catalog)"
+        else:  # GREETING
+            reply_text = self.faq_agent.generate_response(user_text, triage_bridge, context)
+            action_taken = "greeting_provided"
+            responding_agent_name = "SolverAgent (Welcome)"
+
+        return SolverResponse(
+            reply=reply_text,
+            channel=channel,
+            sender_id=sender_id,
+            intent=intent,
+            agent=responding_agent_name,
+            action_taken=action_taken,
+            timestamp=datetime.now(timezone.utc).isoformat()
+        )
+
+
+# ==============================================================================
+# PIPELINE OMNICANAL CENTRALIZADO (3 Agentes Secuenciales)
+# ReaderAgent -> AnalyzerAgent -> SolverAgent
+# ==============================================================================
+class OmniChannelPipeline:
+    """Centralized orchestrator running the sequential 3-agent critical pipeline:
+    ReaderAgent -> AnalyzerAgent -> SolverAgent
+    """
+
+    def __init__(self) -> None:
+        self.reader = ReaderAgent()
+        self.analyzer = AnalyzerAgent()
+        self.solver = SolverAgent()
         self.sessions: Dict[str, List[Dict[str, str]]] = {}
 
     def get_or_create_session(self, session_id: str) -> List[Dict[str, str]]:
@@ -216,33 +460,53 @@ class DentalAgentCoordinator:
             self.sessions[session_id] = []
         return self.sessions[session_id]
 
-    def process_incoming_message(self, message: str, sender_id: str, channel: str) -> AgentResponse:
-        session_id = f"{channel}:{sender_id}"
+    def process_message(self, message: OmniChannelMessage) -> SolverResponse:
+        session_id = f"{message.channel}:{message.sender_id}"
         history = self.get_or_create_session(session_id)
 
-        # Step 1: Triage
-        triage_result = self.triage.process(message, history)
-        intent = triage_result.intent
+        # 1. AnalyzerAgent
+        analysis = self.analyzer.analyze(message, history)
 
-        # Step 2: Routing to specialized agent
-        if intent == "BOOK_APPOINTMENT":
-            reply_text = self.appointment.handle(message, triage_result, sender_id, channel)
-            responding_agent = "Appointment & Calendar Agent"
+        # 2. SolverAgent
+        solution = self.solver.solve(message, analysis, history)
+
+        # 3. Update session history
+        history.append({"role": "user", "content": message.raw_text})
+        history.append({"role": "assistant", "content": solution.reply})
+
+        return solution
+
+    def process_incoming_message(
+        self,
+        message: str,
+        sender_id: str,
+        channel: str = "web",
+        sender_name: str = "Paciente",
+        payload: Optional[Dict[str, Any]] = None
+    ) -> AgentResponse:
+        """Backward-compatible entrypoint matching legacy DentalAgentCoordinator."""
+        if payload:
+            omni_msg = self.reader.read(payload, channel=channel, default_sender=sender_id)
         else:
-            reply_text = self.faq.generate_response(message, triage_result, history)
-            responding_agent = "Dental FAQ & Clinical Agent"
+            omni_msg = self.reader.from_text(
+                text=message,
+                channel=channel,
+                sender_id=sender_id,
+                sender_name=sender_name
+            )
 
-        # Update history
-        history.append({"role": "user", "content": message})
-        history.append({"role": "assistant", "content": reply_text})
+        solution = self.process_message(omni_msg)
 
         return AgentResponse(
-            reply=reply_text,
-            channel=channel,
-            sender_id=sender_id,
-            intent=intent,
-            agent=responding_agent,
-            timestamp=datetime.now(timezone.utc).isoformat()
+            reply=solution.reply,
+            channel=solution.channel,
+            sender_id=solution.sender_id,
+            intent=solution.intent,
+            agent=solution.agent,
+            timestamp=solution.timestamp
         )
 
-coordinator = DentalAgentCoordinator()
+
+pipeline = OmniChannelPipeline()
+coordinator = pipeline
+DentalAgentCoordinator = OmniChannelPipeline

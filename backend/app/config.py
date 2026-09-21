@@ -21,5 +21,11 @@ class ClinicSettings(BaseModel):
     google_calendar_id: str = os.getenv("GOOGLE_CALENDAR_ID", "primary")
     google_credentials_file: str = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
     backend_port: int = int(os.getenv("PORT", "8000"))
+    # Social Gateways (Meta: Facebook/Instagram & YouTube)
+    meta_verify_token: str = os.getenv("META_VERIFY_TOKEN", "lumina_agent_token_2026")
+    meta_access_token: str = os.getenv("META_ACCESS_TOKEN", "")
+    meta_app_secret: str = os.getenv("META_APP_SECRET", "")
+    youtube_api_key: str = os.getenv("YOUTUBE_API_KEY", "")
+    youtube_channel_id: str = os.getenv("YOUTUBE_CHANNEL_ID", "")
 
 settings = ClinicSettings()

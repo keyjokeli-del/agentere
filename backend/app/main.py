@@ -6,15 +6,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.config import settings
-from app.agents.dental_agents import coordinator
+from app.agents.dental_agents import coordinator, pipeline
 from app.services.calendar_service import calendar_service
 from app.models.dental_models import AppointmentRecord, AppointmentCreateRequest, SlotsResponse
+from app.social_gateways.meta import router as meta_router
+from app.social_gateways.youtube import router as youtube_router
 
 app = FastAPI(
     title="Dental Clinic Multi-Agent Omnichannel Hub",
     description="Sistema Multi-Agente para Clínica Dental con soporte para WhatsApp, Facebook, Instagram, YouTube y Google Calendar",
     version="1.0.0"
 )
+
+# Register Social Gateways (Meta & YouTube)
+app.include_router(meta_router)
+app.include_router(youtube_router)
 
 # CORS configuration to allow Next.js frontend
 app.add_middleware(
@@ -86,104 +92,30 @@ def handle_chat_message(payload: ChatMessageRequest):
 @app.post("/api/webhooks/whatsapp")
 @app.post("/api/webhooks/whatsapp/")
 async def whatsapp_webhook(payload: Dict[str, Any]):
-    """Receives incoming WhatsApp messages from the Baileys Node.js bridge."""
-    sender_id = payload.get("sender_id", "unknown")
-    text = payload.get("message", "")
-    sender_name = payload.get("sender_name", sender_id)
+    """Receives incoming WhatsApp messages from the Baileys Node.js bridge, processed via 3-agent pipeline."""
+    omni_msg = pipeline.reader.from_whatsapp(payload)
 
-    print(f"[FastAPI Webhook] Mensaje recibido de {sender_name} ({sender_id}): '{text}'")
+    print(f"[FastAPI Webhook] Mensaje recibido de {omni_msg.sender_name} ({omni_msg.sender_id}): '{omni_msg.raw_text}'")
 
-    if not text:
+    if not omni_msg.raw_text:
         return {"status": "ignored_empty"}
 
-    response = coordinator.process_incoming_message(
-        message=text,
-        sender_id=sender_id,
-        channel="whatsapp"
-    )
+    solution = pipeline.process_message(omni_msg)
 
     RECENT_ACTIVITIES.insert(0, {
         "id": f"act-{len(RECENT_ACTIVITIES) + 1}",
         "channel": "whatsapp",
-        "sender_id": sender_id,
-        "sender_name": sender_name,
-        "message": text,
-        "reply": response.reply,
-        "agent": response.agent,
-        "intent": response.intent,
-        "timestamp": response.timestamp
+        "sender_id": omni_msg.sender_id,
+        "sender_name": omni_msg.sender_name,
+        "message": omni_msg.raw_text,
+        "reply": solution.reply,
+        "agent": solution.agent,
+        "intent": solution.intent,
+        "timestamp": solution.timestamp
     })
 
-    print(f"[FastAPI Webhook] Respondiendo a {sender_id} con agente '{response.agent}' (intención: {response.intent})")
-    return response.model_dump()
-
-# --- Webhook Meta (Facebook & Instagram) ---
-@app.get("/api/webhooks/meta")
-def meta_webhook_verification(
-    hub_mode: Optional[str] = Query(None, alias="hub.mode"),
-    hub_challenge: Optional[str] = Query(None, alias="hub.challenge"),
-    hub_verify_token: Optional[str] = Query(None, alias="hub.verify_token")
-):
-    """Meta Webhook token verification endpoint (free tier)."""
-    VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN", "dental_agent_token_2026")
-    if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
-        return int(hub_challenge) if hub_challenge and hub_challenge.isdigit() else hub_challenge
-    raise HTTPException(status_code=403, detail="Verification token mismatch")
-
-@app.post("/api/webhooks/meta")
-async def meta_webhook_event(request: Request):
-    """Receives Facebook Messenger & Instagram Direct message events."""
-    body = await request.json()
-    # Simple parser for Meta messages
-    entries = body.get("entry", [])
-    responses = []
-    for entry in entries:
-        messaging = entry.get("messaging", [])
-        for event in messaging:
-            sender_id = event.get("sender", {}).get("id")
-            message = event.get("message", {})
-            text = message.get("text")
-            if text and sender_id:
-                # Detect if FB or IG based on entry id or source
-                channel = "instagram" if "instagram" in str(entry) else "facebook"
-                result = coordinator.process_incoming_message(
-                    message=text,
-                    sender_id=str(sender_id),
-                    channel=channel
-                )
-                responses.append(result)
-    return {"status": "received", "processed": len(responses)}
-
-# --- Webhook YouTube ---
-@app.post("/api/webhooks/youtube")
-async def youtube_webhook_event(payload: Dict[str, Any]):
-    """Receives YouTube video comment events for automated dental response."""
-    comment_text = payload.get("comment", "")
-    author = payload.get("author", "Usuario de YouTube")
-    video_id = payload.get("video_id", "")
-
-    if not comment_text:
-        return {"status": "ignored"}
-
-    result = coordinator.process_incoming_message(
-        message=comment_text,
-        sender_id=author,
-        channel="youtube"
-    )
-
-    RECENT_ACTIVITIES.insert(0, {
-        "id": f"act-{len(RECENT_ACTIVITIES) + 1}",
-        "channel": "youtube",
-        "sender_id": author,
-        "sender_name": f"{author} (Video: {video_id})",
-        "message": comment_text,
-        "reply": result.reply,
-        "agent": result.agent,
-        "intent": result.intent,
-        "timestamp": result.timestamp
-    })
-
-    return result.model_dump()
+    print(f"[FastAPI Webhook] Respondiendo a {omni_msg.sender_id} con agente '{solution.agent}' (intención: {solution.intent})")
+    return solution.model_dump()
 
 # --- Appointments & Slots API ---
 @app.get("/api/slots", response_model=SlotsResponse)
