@@ -13,7 +13,23 @@ class CalendarService:
         self._init_google_service()
 
     def _init_google_service(self) -> None:
-        """Initializes Google Calendar API service if credentials exist."""
+        """Initializes Google Calendar API service if credentials exist via env JSON or local file."""
+        creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+        if creds_json:
+            try:
+                from google.oauth2 import service_account
+                from googleapiclient.discovery import build
+                data = json.loads(creds_json)
+                credentials = service_account.Credentials.from_service_account_info(
+                    data,
+                    scopes=["https://www.googleapis.com/auth/calendar"]
+                )
+                self.service = build("calendar", "v3", credentials=credentials)
+                print("[CalendarService] Google Calendar API conectado con éxito desde GOOGLE_CREDENTIALS_JSON.")
+                return
+            except Exception as e:
+                print(f"[CalendarService] Aviso: Error cargando GOOGLE_CREDENTIALS_JSON ({e}). Probando archivo local...")
+
         creds_file = settings.google_credentials_file
         if os.path.exists(creds_file):
             try:
@@ -33,7 +49,7 @@ class CalendarService:
             except Exception as e:
                 print(f"[CalendarService] Aviso: No se pudo conectar a Google Calendar API ({e}). Usando almacén local.")
         else:
-            print("[CalendarService] Sin credentials.json. Operando en modo de calendario local en memoria.")
+            print("[CalendarService] Sin credenciales de Google Calendar. Operando en modo de calendario local en memoria.")
 
     def get_available_slots(self, target_date: date) -> List[str]:
         """Returns a list of available time slots (HH:MM) for a given date."""

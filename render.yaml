@@ -1,0 +1,72 @@
+# ==============================================================================
+# RENDER BLUEPRINT (INFRASTRUCTURE AS CODE - $0 USD FREE TIER)
+# Projeto: Lumina Dental Studio - Multi-Agente Omnicanal
+# ==============================================================================
+# Documentación oficial: https://render.com/docs/blueprint-spec
+# Despliegue en 1-clic conectando el repositorio: https://dashboard.render.com/blueprints
+
+version: "1"
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Backend Core: FastAPI + Groq LLM + Google Calendar API
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: lumina-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    region: oregon
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: GROQ_API_KEY
+        sync: false
+        # Configurar en Render Dashboard con tu API Key gratuita de https://console.groq.com/keys
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: GOOGLE_CALENDAR_ID
+        value: primary
+      - key: GOOGLE_CREDENTIALS_JSON
+        sync: false
+        # Contenido completo del archivo service_account.json descargado de Google Cloud
+      - key: CLINIC_NAME
+        value: "Lumina Dental Studio"
+      - key: CLINIC_ADDRESS
+        value: "Av. Santa Fe 2450, Piso 3, Consultorio B, CABA"
+      - key: CLINIC_PHONE
+        value: "+54 9 11 4567-8900"
+      - key: BUSINESS_HOURS_START
+        value: "9"
+      - key: BUSINESS_HOURS_END
+        value: "19"
+      - key: SLOT_DURATION_MINUTES
+        value: "45"
+
+  # ----------------------------------------------------------------------------
+  # 2. Microservicio de WhatsApp: Baileys + Neon Postgres
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: lumina-whatsapp
+    runtime: docker
+    dockerfilePath: ./whatsapp-service/Dockerfile
+    dockerContext: ./whatsapp-service
+    plan: free
+    region: oregon
+    healthCheckPath: /api/status
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "3001"
+      - key: DATABASE_URL
+        sync: false
+        # Connection string de Neon Serverless Postgres (ej: postgresql://user:pass@ep-cool.us-east-2.aws.neon.tech/neondb?sslmode=require)
+      - key: WA_SESSION_ID
+        value: lumina_dental_session
+      - key: PYTHON_BACKEND_URL
+        value: https://lumina-backend.onrender.com/api/webhooks/whatsapp
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=256"

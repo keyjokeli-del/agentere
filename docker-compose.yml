@@ -1,0 +1,51 @@
+# ==============================================================================
+# DOCKER COMPOSE: Ecosistema Local Multi-Contenedor ($0 USD)
+# ==============================================================================
+# Uso: docker compose up --build
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lumina-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - GOOGLE_CALENDAR_ID=${GOOGLE_CALENDAR_ID:-primary}
+      - GOOGLE_CREDENTIALS_JSON=${GOOGLE_CREDENTIALS_JSON:-}
+      - CLINIC_NAME=${CLINIC_NAME:-Lumina Dental Studio}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    mem_limit: 384m
+
+  whatsapp-service:
+    build:
+      context: ./whatsapp-service
+      dockerfile: Dockerfile
+    container_name: lumina-whatsapp
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DATABASE_URL=${NEON_DATABASE_URL:-}
+      - PYTHON_BACKEND_URL=http://backend:8000/api/webhooks/whatsapp
+      - WA_SESSION_ID=${WA_SESSION_ID:-lumina_dental_session}
+      - NODE_OPTIONS=--max-old-space-size=256
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/status', (res) => { if (res.statusCode !== 200) process.exit(1); })"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    mem_limit: 384m
