@@ -21,6 +21,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Global safety handlers to prevent process termination on abnormal WebSocket drops (e.g. 1006 / 428)
+process.on('unhandledRejection', (reason) => {
+  console.warn('[Baileys Warning] Unhandled Promise Rejection interceptado:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[Baileys Error] Uncaught Exception interceptado:', err.message);
+});
+
 const PORT = process.env.WHATSAPP_SERVICE_PORT || process.env.PORT || 3001;
 const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000/api/webhooks/whatsapp';
 const NEON_DATABASE_URL = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL || '';
@@ -61,126 +69,135 @@ async function forwardToFastAPI(messageText, sender, senderName) {
 async function startWhatsApp() {
   connectionStatus = 'connecting';
 
-  let state, saveCreds;
+  try {
+    let state, saveCreds;
 
-  // Decide storage engine: Neon Postgres vs Local Disk
-  if (NEON_DATABASE_URL && NEON_DATABASE_URL.startsWith('postgres')) {
-    try {
-      console.log('[Baileys] Inicializando almacenamiento persistente en Neon PostgreSQL...');
-      const neonAuth = await useNeonAuthState(NEON_DATABASE_URL, WA_SESSION_ID);
-      state = neonAuth.state;
-      saveCreds = neonAuth.saveCreds;
-      clearDBSession = neonAuth.clearSession;
-      activeStorageMode = 'neon_postgres';
-    } catch (dbErr) {
-      console.error('[Baileys] Error conectando a Neon PostgreSQL:', dbErr.message);
-      console.log('[Baileys] Pasando a modo de contingencia: almacenamiento en disco local.');
+    // Decide storage engine: Neon Postgres vs Local Disk
+    if (NEON_DATABASE_URL && NEON_DATABASE_URL.startsWith('postgres')) {
+      try {
+        console.log('[Baileys] Inicializando almacenamiento persistente en Neon PostgreSQL...');
+        const neonAuth = await useNeonAuthState(NEON_DATABASE_URL, WA_SESSION_ID);
+        state = neonAuth.state;
+        saveCreds = neonAuth.saveCreds;
+        clearDBSession = neonAuth.clearSession;
+        activeStorageMode = 'neon_postgres';
+      } catch (dbErr) {
+        console.error('[Baileys] Error conectando a Neon PostgreSQL:', dbErr.message);
+        console.log('[Baileys] Pasando a modo de contingencia: almacenamiento en disco local.');
+        const localAuth = await useMultiFileAuthState(authFolder);
+        state = localAuth.state;
+        saveCreds = localAuth.saveCreds;
+        activeStorageMode = 'local_disk';
+      }
+    } else {
+      console.log('[Baileys] Sin NEON_DATABASE_URL. Utilizando almacenamiento en disco local (auth_info_baileys).');
       const localAuth = await useMultiFileAuthState(authFolder);
       state = localAuth.state;
       saveCreds = localAuth.saveCreds;
       activeStorageMode = 'local_disk';
     }
-  } else {
-    console.log('[Baileys] Sin NEON_DATABASE_URL. Utilizando almacenamiento en disco local (auth_info_baileys).');
-    const localAuth = await useMultiFileAuthState(authFolder);
-    state = localAuth.state;
-    saveCreds = localAuth.saveCreds;
-    activeStorageMode = 'local_disk';
+
+    const { version, isLatest } = await fetchLatestBaileysVersion();
+
+    sock = makeWASocket({
+      version,
+      logger,
+      printQRInTerminal: false,
+      auth: state,
+      generateHighQualityLinkPreview: true,
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect, qr } = update;
+
+      if (qr) {
+        try {
+          currentQR = await qrcode.toDataURL(qr);
+          connectionStatus = 'waiting_for_scan';
+          console.log('[Baileys] Código QR generado. Listo para escanear en el dashboard.');
+        } catch (err) {
+          console.error('[Baileys] Error generando código QR:', err);
+        }
+      }
+
+      if (connection === 'close') {
+        const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+        
+        console.log(
+          `[Baileys] Conexión cerrada (código ${statusCode}): ${lastDisconnect?.error?.message || lastDisconnect?.error}`
+        );
+        connectionStatus = 'disconnected';
+        currentQR = null;
+        connectedUser = null;
+
+        if (isLoggedOut) {
+          console.log('[Baileys] Sesión cerrada o expirada. Purgando credenciales...');
+          if (clearDBSession) {
+            await clearDBSession().catch(() => {});
+          }
+          if (fs.existsSync(authFolder)) {
+            fs.rmSync(authFolder, { recursive: true, force: true });
+          }
+          reconnectAttempts = 0;
+          setTimeout(startWhatsApp, 1500);
+        } else {
+          // Exponential backoff: 3s, 6s, 12s, max 30s
+          reconnectAttempts++;
+          const delay = calculateBackoffDelay(reconnectAttempts);
+          console.log(`[Baileys] Reconectando automáticamente en ${delay / 1000}s (intento #${reconnectAttempts})...`);
+          setTimeout(startWhatsApp, delay);
+        }
+      } else if (connection === 'open') {
+        console.log(`[Baileys] ¡WhatsApp conectado con éxito! Modo de almacenamiento: ${activeStorageMode}`);
+        connectionStatus = 'connected';
+        currentQR = null;
+        connectedUser = sock.user?.id || 'Conectado';
+        reconnectAttempts = 0; // Reset backoff
+      }
+    });
+
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+      if (type !== 'notify') return;
+
+      for (const msg of messages) {
+        if (!msg.message || msg.key.fromMe) continue;
+        const sender = msg.key.remoteJid;
+        if (sender.endsWith('@broadcast')) continue;
+
+        const messageText =
+          msg.message.conversation ||
+          msg.message.extendedTextMessage?.text ||
+          msg.message.imageMessage?.caption ||
+          '';
+
+        if (!messageText.trim()) continue;
+
+        const senderName = msg.pushName || 'Paciente';
+        console.log(`[Baileys] Mensaje recibido de ${senderName} (${sender}): ${messageText}`);
+
+        try {
+          // Forward to Python Backend Agent
+          const data = await forwardToFastAPI(messageText, sender, senderName);
+          if (data && data.reply) {
+            console.log(`[Baileys] Enviando respuesta del agente a ${sender}...`);
+            await sock.sendMessage(sender, { text: data.reply });
+          }
+        } catch (err) {
+          console.error('[Baileys] Error conectando con el backend de Python:', err.message);
+        }
+      }
+    });
+  } catch (initErr) {
+    console.error('[Baileys] Error durante la inicialización:', initErr.message || initErr);
+    connectionStatus = 'disconnected';
+    reconnectAttempts++;
+    const delay = calculateBackoffDelay(reconnectAttempts);
+    console.log(`[Baileys] Reintentando inicialización en ${delay / 1000}s (intento #${reconnectAttempts})...`);
+    setTimeout(startWhatsApp, delay);
   }
-
-  const { version, isLatest } = await fetchLatestBaileysVersion();
-
-  sock = makeWASocket({
-    version,
-    logger,
-    printQRInTerminal: false,
-    auth: state,
-    generateHighQualityLinkPreview: true,
-  });
-
-  sock.ev.on('creds.update', saveCreds);
-
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (qr) {
-      try {
-        currentQR = await qrcode.toDataURL(qr);
-        connectionStatus = 'waiting_for_scan';
-        console.log('[Baileys] Código QR generado. Listo para escanear en el dashboard.');
-      } catch (err) {
-        console.error('[Baileys] Error generando código QR:', err);
-      }
-    }
-
-    if (connection === 'close') {
-      const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
-      
-      console.log(
-        `[Baileys] Conexión cerrada (código ${statusCode}): ${lastDisconnect?.error?.message || lastDisconnect?.error}`
-      );
-      connectionStatus = 'disconnected';
-      currentQR = null;
-      connectedUser = null;
-
-      if (isLoggedOut) {
-        console.log('[Baileys] Sesión cerrada o expirada. Purgando credenciales...');
-        if (clearDBSession) {
-          await clearDBSession();
-        }
-        if (fs.existsSync(authFolder)) {
-          fs.rmSync(authFolder, { recursive: true, force: true });
-        }
-        reconnectAttempts = 0;
-        setTimeout(startWhatsApp, 1500);
-      } else {
-        // Exponential backoff: 3s, 6s, 12s, max 30s
-        reconnectAttempts++;
-        const delay = calculateBackoffDelay(reconnectAttempts);
-        console.log(`[Baileys] Reconectando automáticamente en ${delay / 1000}s (intento #${reconnectAttempts})...`);
-        setTimeout(startWhatsApp, delay);
-      }
-    } else if (connection === 'open') {
-      console.log(`[Baileys] ¡WhatsApp conectado con éxito! Modo de almacenamiento: ${activeStorageMode}`);
-      connectionStatus = 'connected';
-      currentQR = null;
-      connectedUser = sock.user?.id || 'Conectado';
-      reconnectAttempts = 0; // Reset backoff
-    }
-  });
-
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return;
-
-    for (const msg of messages) {
-      if (!msg.message || msg.key.fromMe) continue;
-      const sender = msg.key.remoteJid;
-      if (sender.endsWith('@broadcast')) continue;
-
-      const messageText =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
-        msg.message.imageMessage?.caption ||
-        '';
-
-      if (!messageText.trim()) continue;
-
-      const senderName = msg.pushName || sender.split('@')[0];
-      console.log(`[Baileys] Mensaje recibido de ${senderName} (${sender}): ${messageText}`);
-
-      try {
-        // Forward to Python Backend Agent
-        const data = await forwardToFastAPI(messageText, sender, senderName);
-        if (data && data.reply) {
-          console.log(`[Baileys] Enviando respuesta del agente a ${sender}...`);
-          await sock.sendMessage(sender, { text: data.reply });
-        }
-      } catch (err) {
-        console.error('[Baileys] Error conectando con el backend de Python:', err.message);
-      }
-    }
-  });
 }
 
 // REST Endpoints for Dashboard
