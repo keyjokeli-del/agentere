@@ -64,9 +64,12 @@ services:
       - key: DATABASE_URL
         sync: false
         # Connection string de Neon Serverless Postgres (ej: postgresql://user:pass@ep-cool.us-east-2.aws.neon.tech/neondb?sslmode=require)
+      - key: NEON_DATABASE_URL
+        sync: false
+        # Variable homóloga para compatibilidad estricta
       - key: WA_SESSION_ID
         value: lumina_dental_session
       - key: PYTHON_BACKEND_URL
-        value: https://lumina-backend.onrender.com/api/webhooks/whatsapp
+        value: https://lumina-backend-rti9.onrender.com/api/webhooks/whatsapp
       - key: NODE_OPTIONS
         value: "--max-old-space-size=256"

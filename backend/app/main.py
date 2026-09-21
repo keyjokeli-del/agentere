@@ -84,11 +84,14 @@ def handle_chat_message(payload: ChatMessageRequest):
 
 # --- Webhook WhatsApp (From Baileys Service) ---
 @app.post("/api/webhooks/whatsapp")
+@app.post("/api/webhooks/whatsapp/")
 async def whatsapp_webhook(payload: Dict[str, Any]):
     """Receives incoming WhatsApp messages from the Baileys Node.js bridge."""
     sender_id = payload.get("sender_id", "unknown")
     text = payload.get("message", "")
     sender_name = payload.get("sender_name", sender_id)
+
+    print(f"[FastAPI Webhook] Mensaje recibido de {sender_name} ({sender_id}): '{text}'")
 
     if not text:
         return {"status": "ignored_empty"}
@@ -111,6 +114,7 @@ async def whatsapp_webhook(payload: Dict[str, Any]):
         "timestamp": response.timestamp
     })
 
+    print(f"[FastAPI Webhook] Respondiendo a {sender_id} con agente '{response.agent}' (intención: {response.intent})")
     return response.model_dump()
 
 # --- Webhook Meta (Facebook & Instagram) ---

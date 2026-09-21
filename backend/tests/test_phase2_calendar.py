@@ -2,11 +2,18 @@ import pytest
 from datetime import date, timedelta
 from fastapi.testclient import TestClient
 from app.main import app
-from app.services.calendar_service import CalendarService
+from app.services.calendar_service import CalendarService, calendar_service
 from app.agents.dental_agents import AppointmentAgent
 from app.models.dental_models import TriageResult
 
 client = TestClient(app)
+
+@pytest.fixture(autouse=True)
+def isolate_calendar_service(monkeypatch):
+    """Ensures unit tests run deterministically in-memory without polluting live Google Calendar."""
+    monkeypatch.setattr(CalendarService, "_init_google_service", lambda self: None)
+    monkeypatch.setattr(calendar_service, "service", None)
+    calendar_service.local_appointments = []
 
 def test_calendar_service_slots_and_conflict():
     """Validates Task 2.1: Available slots calculation and collision rejection."""

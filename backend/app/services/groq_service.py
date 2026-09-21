@@ -4,9 +4,14 @@ import json
 from typing import List, Dict, Any, Optional
 from app.config import settings
 
+_DEFAULT_API_KEY = object()
+
 class GroqService:
-    def __init__(self, api_key: Optional[str] = None) -> None:
-        self.api_key = api_key or settings.groq_api_key
+    def __init__(self, api_key: Any = _DEFAULT_API_KEY) -> None:
+        if api_key is _DEFAULT_API_KEY:
+            self.api_key = settings.groq_api_key
+        else:
+            self.api_key = api_key
         self.model = settings.groq_model
         self.client = None
         if self.api_key:
@@ -135,7 +140,7 @@ class GroqService:
             )
 
         return (
-            f"¡Hola! Te escribe el asistente de {settings.clinic_name} en {settings.clinic_address}. "
+            f"¡Hola! Te escribe el asistente de la Clínica Dental {settings.clinic_name} en {settings.clinic_address}. "
             f"Horario de atención: {settings.business_hours_start}:00 a {settings.business_hours_end}:00 hs. "
             f"¿En qué tratamiento te podemos orientar o te gustaría agendar una cita?"
         )

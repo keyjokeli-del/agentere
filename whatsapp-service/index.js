@@ -30,9 +30,33 @@ process.on('uncaughtException', (err) => {
 });
 
 const PORT = process.env.WHATSAPP_SERVICE_PORT || process.env.PORT || 3001;
-const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000/api/webhooks/whatsapp';
-const NEON_DATABASE_URL = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL || '';
-const WA_SESSION_ID = process.env.WA_SESSION_ID || 'dental_clinic_session';
+const NEON_DATABASE_URL = (
+  process.env.NEON_DATABASE_URL ||
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  ''
+).trim();
+const WA_SESSION_ID = process.env.WA_SESSION_ID || 'lumina_dental_session';
+
+/**
+ * Normaliza la URL del Webhook de FastAPI para evitar dobles slashes,
+ * rutas truncadas o discrepancias entre el host base y el endpoint final.
+ */
+function getFastApiWebhookUrl() {
+  let raw = (process.env.PYTHON_BACKEND_URL || 'http://localhost:8000').trim();
+  // Elimina barras finales redundantes
+  raw = raw.replace(/\/+$/, '');
+  
+  // Si no termina con el endpoint exacto /api/webhooks/whatsapp, agregarlo limpiamente
+  if (!raw.endsWith('/api/webhooks/whatsapp')) {
+    if (raw.endsWith('/api/webhooks')) {
+      raw = `${raw}/whatsapp`;
+    } else {
+      raw = `${raw}/api/webhooks/whatsapp`;
+    }
+  }
+  return raw;
+}
 
 let currentQR = null;
 let connectionStatus = 'disconnected'; // 'disconnected' | 'connecting' | 'connected'
@@ -51,7 +75,9 @@ function calculateBackoffDelay(attempt) {
 }
 
 async function forwardToFastAPI(messageText, sender, senderName) {
-  const response = await fetch(PYTHON_BACKEND_URL, {
+  const targetUrl = getFastApiWebhookUrl();
+  console.log(`[Baileys] Reenviando mensaje a FastAPI en ${targetUrl} (de: ${senderName})`);
+  const response = await fetch(targetUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -61,7 +87,7 @@ async function forwardToFastAPI(messageText, sender, senderName) {
     })
   });
   if (!response.ok) {
-    throw new Error(`FastAPI devolvió status ${response.status}: ${response.statusText}`);
+    throw new Error(`FastAPI en ${targetUrl} devolvió status ${response.status}: ${response.statusText}`);
   }
   return await response.json();
 }
@@ -81,6 +107,7 @@ async function startWhatsApp() {
         saveCreds = neonAuth.saveCreds;
         clearDBSession = neonAuth.clearSession;
         activeStorageMode = 'neon_postgres';
+        console.log('[Baileys] Conectado a Neon PostgreSQL con éxito. Persistencia activa.');
       } catch (dbErr) {
         console.error('[Baileys] Error conectando a Neon PostgreSQL:', dbErr.message);
         console.log('[Baileys] Pasando a modo de contingencia: almacenamiento en disco local.');
@@ -90,7 +117,7 @@ async function startWhatsApp() {
         activeStorageMode = 'local_disk';
       }
     } else {
-      console.log('[Baileys] Sin NEON_DATABASE_URL. Utilizando almacenamiento en disco local (auth_info_baileys).');
+      console.warn('[Baileys] Sin NEON_DATABASE_URL ni DATABASE_URL configurada. Utilizando almacenamiento en disco local (auth_info_baileys).');
       const localAuth = await useMultiFileAuthState(authFolder);
       state = localAuth.state;
       saveCreds = localAuth.saveCreds;
