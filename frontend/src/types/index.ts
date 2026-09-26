@@ -21,6 +21,10 @@ export interface Activity {
   agent: string;
   intent: string;
   timestamp: string;
+  delivery_status?: 'sent' | 'delivered' | 'read' | string;
+  latency_ms?: number;
+  urgency?: 'RUTINA' | 'MODERADO' | 'URGENCIA' | string;
+  handoff_active?: boolean;
 }
 
 export interface WhatsAppStatus {

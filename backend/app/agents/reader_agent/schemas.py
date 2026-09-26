@@ -5,12 +5,13 @@ from pydantic import BaseModel, Field
 
 class OmniChannelMessage(BaseModel):
     """Unified inbound message schema across all communication channels."""
-    channel: Literal["whatsapp", "facebook", "instagram", "youtube", "web"] = Field(
+    channel: Literal["whatsapp", "facebook", "instagram", "youtube", "web", "telegram"] = Field(
         ..., description="Canal de procedencia del mensaje"
     )
     sender_id: str = Field(..., description="Identificador único del remitente en el canal")
     sender_name: str = Field("Paciente", description="Nombre o apodo visible del paciente")
     raw_text: str = Field(..., description="Texto limpio extraído del mensaje")
+    media_type: Optional[str] = Field(None, description="Tipo de medio si aplica ('audio', 'image', None)")
     metadata: Dict[str, Any] = Field(
         default_factory=dict,
         description="Metadatos contextuales (post_id, comment_id, message_id, etc.)"

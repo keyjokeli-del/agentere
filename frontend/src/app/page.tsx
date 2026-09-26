@@ -7,6 +7,7 @@ import Features from '@/components/landing/Features';
 import TrustMetrics from '@/components/landing/TrustMetrics';
 import OmniChannelMockup from '@/components/landing/OmniChannelMockup';
 import BookingCTA from '@/components/landing/BookingCTA';
+import FloatingChatWidget from '@/components/landing/FloatingChatWidget';
 import Footer from '@/components/landing/Footer';
 
 export default function LandingPage() {
@@ -34,6 +35,9 @@ export default function LandingPage() {
         {/* 6. Interactive Booking CTA & 45-min Slot Picker */}
         <BookingCTA />
       </main>
+
+      {/* Floating Realtime Chat Widget (Mejora 20) */}
+      <FloatingChatWidget />
 
       {/* 7. Footer with Medical Disclaimer & Clinic Address */}
       <Footer />

@@ -29,7 +29,10 @@ def test_chat_faq_flow():
     assert data["channel"] == "whatsapp"
 
 def test_calendar_slots_and_booking():
-    tomorrow = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+    target_dt = date.today() + timedelta(days=1)
+    if target_dt.weekday() == 6:  # Closed on Sunday
+        target_dt += timedelta(days=1)
+    tomorrow = target_dt.strftime("%Y-%m-%d")
     slots_res = client.get(f"/api/slots?target_date={tomorrow}")
     assert slots_res.status_code == 200
     slots_data = slots_res.json()

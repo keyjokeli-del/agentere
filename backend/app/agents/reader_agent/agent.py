@@ -1,6 +1,8 @@
+import base64
 from typing import Dict, Any, List, Optional
 from app.agents.reader_agent.schemas import OmniChannelMessage
 from app.agents.reader_agent.memory import ReaderMemory
+from app.services.groq_service import GroqService
 
 
 class ReaderAgent:
@@ -8,6 +10,12 @@ class ReaderAgent:
 
     def __init__(self, memory: Optional[Any] = None, memory_service: Optional[Any] = None) -> None:
         self.memory = memory or memory_service or ReaderMemory()
+        self._groq = None
+
+    def _get_groq(self) -> GroqService:
+        if self._groq is None:
+            self._groq = GroqService()
+        return self._groq
 
     def read(self, payload: Any, channel: str = "web", default_sender: str = "unknown") -> OmniChannelMessage:
         """Universal parser dispatching based on detected or specified channel."""
@@ -17,16 +25,31 @@ class ReaderAgent:
             return self.from_meta(payload if isinstance(payload, dict) else {"message": str(payload)}, channel=channel)
         elif channel == "youtube":
             return self.from_youtube(payload if isinstance(payload, dict) else {"message": str(payload)})
+        elif channel == "telegram":
+            return self.from_telegram(payload if isinstance(payload, dict) else {"message": str(payload)})
         elif isinstance(payload, dict):
             return self.from_dict(payload, channel=channel, default_sender=default_sender)
         else:
             return self.from_text(str(payload), channel=channel, sender_id=default_sender)
 
     def from_whatsapp(self, payload: Dict[str, Any]) -> OmniChannelMessage:
-        """Parses WhatsApp payloads (Baileys service format)."""
+        """Parses WhatsApp payloads (Baileys service format), supporting text and voice notes."""
         sender_id = str(payload.get("sender_id") or "unknown_wa").strip()
         text = str(payload.get("message") or payload.get("raw_text") or "").strip()
         sender_name = str(payload.get("sender_name") or sender_id).strip()
+        media_type = payload.get("media_type")
+
+        # Audio transcription (Mejora 1)
+        if payload.get("audio_base64"):
+            try:
+                audio_bytes = base64.b64decode(payload["audio_base64"])
+                transcription = self._get_groq().transcribe_audio(audio_bytes)
+                if transcription:
+                    text = f"[Audio transcrito]: {transcription}"
+                    media_type = "audio"
+            except Exception as e:
+                print(f"[ReaderAgent] Transcripción de audio WhatsApp advertencia: {e}")
+
         history = payload.get("recent_history")
         if history is None:
             history = self.memory.get_recent_turns("whatsapp", sender_id, limit=4)
@@ -35,6 +58,7 @@ class ReaderAgent:
             sender_id=sender_id,
             sender_name=sender_name or "Paciente",
             raw_text=text,
+            media_type=media_type,
             metadata=payload.get("metadata", {}),
             recent_history=history
         )
@@ -73,8 +97,13 @@ class ReaderAgent:
                         metadata["mid"] = msg_obj.get("mid")
                     elif isinstance(msg_obj, str):
                         text = msg_obj.strip()
+                    # Instagram public comments (Mejora 16)
+                    if val.get("text"):
+                        text = str(val["text"]).strip()
+                        metadata["comment_id"] = val.get("id")
+                        metadata["media_id"] = val.get("media", {}).get("id")
 
-        # Handle top-level value (e.g., Meta Developer console test events)
+        # Handle top-level value
         if not text and isinstance(payload.get("value"), dict):
             val = payload["value"]
             sender_id = str(val.get("sender", {}).get("id") or sender_id)
@@ -156,21 +185,50 @@ class ReaderAgent:
             recent_history=history
         )
 
+    def from_telegram(self, payload: Dict[str, Any]) -> OmniChannelMessage:
+        """Parses Telegram Bot API webhook updates (Mejora 17)."""
+        msg = payload.get("message") or payload
+        chat = msg.get("chat", {}) if isinstance(msg, dict) else {}
+        user_from = msg.get("from", {}) if isinstance(msg, dict) else {}
+
+        sender_id = str(chat.get("id") or user_from.get("id") or payload.get("sender_id") or "unknown_tg").strip()
+        first_name = user_from.get("first_name") or chat.get("first_name") or payload.get("sender_name") or "Paciente Telegram"
+        text = str(msg.get("text") or payload.get("message") or payload.get("raw_text") or "").strip()
+
+        metadata = {
+            "update_id": payload.get("update_id"),
+            "message_id": msg.get("message_id") if isinstance(msg, dict) else None
+        }
+
+        history = payload.get("recent_history")
+        if history is None:
+            history = self.memory.get_recent_turns("telegram", sender_id, limit=4)
+
+        return OmniChannelMessage(
+            channel="telegram",
+            sender_id=sender_id,
+            sender_name=first_name,
+            raw_text=text,
+            metadata=metadata,
+            recent_history=history
+        )
+
     def from_dict(self, payload: Dict[str, Any], channel: str = "web", default_sender: str = "unknown") -> OmniChannelMessage:
         """Parses generic dictionary payloads from Webhooks or internal callers."""
         raw_text = str(payload.get("message") or payload.get("text") or payload.get("raw_text") or "").strip()
         sender_id = str(payload.get("sender_id") or default_sender).strip()
         sender_name = str(payload.get("sender_name") or "Paciente").strip()
         ch = str(payload.get("channel") or channel).lower()
-        valid_ch = ch if ch in ("whatsapp", "facebook", "instagram", "youtube", "web") else "web"
+        valid_ch = ch if ch in ("whatsapp", "facebook", "instagram", "youtube", "web", "telegram") else "web"
         history = payload.get("recent_history")
         if history is None:
             history = self.memory.get_recent_turns(valid_ch, sender_id, limit=4)
         return OmniChannelMessage(
-            channel=valid_ch,
+            channel=valid_ch,  # type: ignore[arg-type]
             sender_id=sender_id,
             sender_name=sender_name,
             raw_text=raw_text,
+            media_type=payload.get("media_type"),
             metadata=payload.get("metadata", {}),
             recent_history=history
         )
@@ -184,12 +242,13 @@ class ReaderAgent:
         recent_history: Optional[List[Dict[str, str]]] = None
     ) -> OmniChannelMessage:
         """Convenience factory for plain text messages from frontend or tests."""
-        valid_ch = channel if channel in ("whatsapp", "facebook", "instagram", "youtube", "web") else "web"
+        ch = channel.lower()
+        valid_ch = ch if ch in ("whatsapp", "facebook", "instagram", "youtube", "web", "telegram") else "web"
         history = recent_history
         if history is None:
             history = self.memory.get_recent_turns(valid_ch, sender_id, limit=4)
         return OmniChannelMessage(
-            channel=valid_ch,
+            channel=valid_ch,  # type: ignore[arg-type]
             sender_id=sender_id,
             sender_name=sender_name,
             raw_text=text.strip(),

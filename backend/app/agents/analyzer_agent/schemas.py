@@ -26,3 +26,31 @@ class ClinicalAnalysis(BaseModel):
         default_factory=list,
         description="Memorias a largo plazo del paciente recuperadas vía RAG"
     )
+    fdi_teeth: List[int] = Field(
+        default_factory=list,
+        description="Piezas dentales detectadas bajo nomenclatura FDI (11 a 48)"
+    )
+    sentiment_score: float = Field(
+        0.0,
+        description="Puntaje de sentimiento del paciente (-1.0 negativo a 1.0 positivo)"
+    )
+    frustration_detected: bool = Field(
+        False,
+        description="Indica si el paciente expresa frustración o enojo severo"
+    )
+    clinical_followup_needed: bool = Field(
+        False,
+        description="Indica si se deben formular preguntas de seguimiento clínico de seguridad"
+    )
+    clinical_followup_questions: List[str] = Field(
+        default_factory=list,
+        description="Preguntas de triaje clínico de seguridad"
+    )
+    visual_assessment: Optional[str] = Field(
+        None,
+        description="Evaluación preliminar de imagen dental vía Gemini"
+    )
+    detected_language: str = Field(
+        "es",
+        description="Idioma detectado del paciente ('es', 'en', 'pt', 'fr')"
+    )

@@ -12,7 +12,8 @@ const {
   default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
-  fetchLatestBaileysVersion
+  fetchLatestBaileysVersion,
+  downloadMediaMessage
 } = require('@whiskeysockets/baileys');
 
 const { useNeonAuthState } = require('./neonAuthState');
@@ -74,17 +75,22 @@ function calculateBackoffDelay(attempt) {
   return Math.min(3000 * Math.pow(2, Math.max(0, attempt - 1)), 30000);
 }
 
-async function forwardToFastAPI(messageText, sender, senderName) {
+async function forwardToFastAPI(messageText, sender, senderName, audioBase64 = null) {
   const targetUrl = getFastApiWebhookUrl();
   console.log(`[Baileys] Reenviando mensaje a FastAPI en ${targetUrl} (de: ${senderName})`);
+  const payload = {
+    message: messageText || (audioBase64 ? '[Audio de WhatsApp]' : ''),
+    sender_id: sender,
+    sender_name: senderName
+  };
+  if (audioBase64) {
+    payload.audio_base64 = audioBase64;
+    payload.media_type = 'audio';
+  }
   const response = await fetch(targetUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message: messageText,
-      sender_id: sender,
-      sender_name: senderName
-    })
+    body: JSON.stringify(payload)
   });
   if (!response.ok) {
     throw new Error(`FastAPI en ${targetUrl} devolvió status ${response.status}: ${response.statusText}`);
@@ -194,20 +200,36 @@ async function startWhatsApp() {
         const sender = msg.key.remoteJid;
         if (sender.endsWith('@broadcast')) continue;
 
-        const messageText =
+        let messageText =
           msg.message.conversation ||
           msg.message.extendedTextMessage?.text ||
           msg.message.imageMessage?.caption ||
           '';
 
-        if (!messageText.trim()) continue;
+        let audioBase64 = null;
+        if (msg.message.audioMessage) {
+          try {
+            console.log(`[Baileys] 🎙️ Nota de voz recibida de ${sender}, descargando buffer para transcripción...`);
+            const buffer = await downloadMediaMessage(msg, 'buffer', {});
+            audioBase64 = buffer.toString('base64');
+          } catch (mediaErr) {
+            console.warn('[Baileys] Error descargando audio:', mediaErr.message);
+          }
+        }
+
+        if (!messageText.trim() && !audioBase64) continue;
 
         const senderName = msg.pushName || 'Paciente';
-        console.log(`[Baileys] Mensaje recibido de ${senderName} (${sender}): ${messageText}`);
+        console.log(`[Baileys] Mensaje recibido de ${senderName} (${sender}): ${messageText || '[Nota de voz]'}`);
+
+        // Typing indicator (Mejora 15)
+        try {
+          await sock.sendPresenceUpdate('composing', sender);
+        } catch (presErr) {}
 
         try {
           // Forward to Python Backend Agent
-          const data = await forwardToFastAPI(messageText, sender, senderName);
+          const data = await forwardToFastAPI(messageText, sender, senderName, audioBase64);
           if (data && data.reply) {
             console.log(`[Baileys] Enviando respuesta del agente a ${sender}...`);
             await sock.sendMessage(sender, { text: data.reply });

@@ -55,6 +55,27 @@ class GroqService:
                 print(f"[GroqService] Error en inferencia Groq ({e}). Conmutando a fallback determinista.")
             return self._fallback_response(messages)
 
+    def transcribe_audio(
+        self,
+        audio_bytes: bytes,
+        filename: str = "voice.ogg",
+        model: str = "whisper-large-v3-turbo"
+    ) -> str:
+        """Transcribes incoming audio/voice notes via Groq's whisper-large-v3-turbo API with zero local RAM footprint."""
+        if not self.client or not audio_bytes:
+            return ""
+        try:
+            transcription = self.client.audio.transcriptions.create(
+                file=(filename, audio_bytes),
+                model=model,
+                language="es",
+                response_format="text"
+            )
+            return str(transcription).strip()
+        except Exception as e:
+            print(f"[GroqService] Transcripción de audio fallida ({e}). Retornando cadena vacía.")
+            return ""
+
 
     def _fallback_response(self, messages: List[Dict[str, str]]) -> str:
         """Deterministic rule-based response adhering strictly to Pydantic schemas."""

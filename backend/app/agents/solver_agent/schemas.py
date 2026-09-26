@@ -11,6 +11,12 @@ class SolverResponse(BaseModel):
     intent: str = Field(..., description="Intención clínica diagnosticada")
     agent: str = Field("SolverAgent", description="Agente resolutor responsable")
     action_taken: str = Field("responded", description="Acción clínica ejecutada")
+    google_calendar_url: Optional[str] = Field(None, description="Enlace para agendar en Google Calendar en 1 clic")
+    ics_url: Optional[str] = Field(None, description="Enlace descargable para archivo .ics de calendario")
+    assigned_doctor: Optional[str] = Field(None, description="Doctor asignado según la especialidad")
+    fdi_teeth: List[int] = Field(default_factory=list, description="Piezas dentales FDI asociadas")
+    frustration_detected: bool = Field(False, description="Indica si hubo frustración detectada")
+    detected_language: str = Field("es", description="Idioma de la interacción")
     timestamp: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat(),
         description="Marca temporal de la respuesta"

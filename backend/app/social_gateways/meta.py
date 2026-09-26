@@ -3,19 +3,20 @@ import hmac
 import hashlib
 import json
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Request, HTTPException, Query, Header
+from fastapi import APIRouter, Request, HTTPException, Query, Header, BackgroundTasks
 import httpx
 
 from app.config import settings
 from app.agents import pipeline
 from app.models.dental_models import SolverResponse
+from app.core.database import db_manager
 
 router = APIRouter(tags=["Meta Social Gateway"])
+
 
 def verify_meta_signature(raw_body: bytes, signature_header: Optional[str], app_secret: str) -> bool:
     """Verifies the X-Hub-Signature-256 header sent by Meta using HMAC-SHA256."""
     if not app_secret:
-        # Dev / fallback mode when secret is not configured
         return True
     if not signature_header or not signature_header.startswith("sha256="):
         return False
@@ -27,6 +28,36 @@ def verify_meta_signature(raw_body: bytes, signature_header: Optional[str], app_
     ).hexdigest()
     expected_signature = f"sha256={expected_hash}"
     return hmac.compare_digest(expected_signature, signature_header)
+
+
+async def send_meta_typing_indicator(recipient_id: str, access_token: str) -> None:
+    """Sends 'typing_on' sender action to Messenger or Instagram (Mejora 15)."""
+    if not access_token:
+        return
+    url = "https://graph.facebook.com/v21.0/me/messages"
+    payload = {"recipient": {"id": recipient_id}, "sender_action": "typing_on"}
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            await client.post(url, json=payload, headers=headers)
+    except Exception:
+        pass
+
+
+async def reply_public_instagram_comment(comment_id: str, reply_text: str, access_token: str) -> Dict[str, Any]:
+    """Posts a public reply to an Instagram comment (Mejora 16)."""
+    if not access_token or not comment_id:
+        return {"status": "simulated", "comment_id": comment_id}
+    url = f"https://graph.facebook.com/v21.0/{comment_id}/replies"
+    payload = {"message": reply_text}
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            return resp.json() if resp.is_success else {"status": "error", "code": resp.status_code}
+    except Exception as e:
+        return {"status": "network_error", "detail": str(e)}
+
 
 async def dispatch_meta_graph_reply(recipient_id: str, reply_text: str, access_token: str) -> Dict[str, Any]:
     """Dispatches outgoing reply via Meta Graph API (Messenger / Instagram Direct)."""
@@ -64,6 +95,7 @@ async def dispatch_meta_graph_reply(recipient_id: str, reply_text: str, access_t
         print(f"[Meta Gateway] Error de conexión con Graph API: {e}")
         return {"status": "network_error", "detail": str(e)}
 
+
 @router.get("/api/webhooks/meta")
 def meta_webhook_verification(
     hub_mode: Optional[str] = Query(None, alias="hub.mode"),
@@ -77,10 +109,12 @@ def meta_webhook_verification(
         return int(hub_challenge) if hub_challenge and hub_challenge.isdigit() else hub_challenge
     raise HTTPException(status_code=403, detail="Verification token mismatch")
 
+
 @router.post("/api/webhooks/meta")
 @router.post("/api/webhooks/meta/")
 async def meta_webhook_event(
     request: Request,
+    background_tasks: BackgroundTasks,
     x_hub_signature_256: Optional[str] = Header(None, alias="X-Hub-Signature-256")
 ):
     """Receives Facebook Messenger & Instagram Direct events, verified with HMAC-SHA256."""
@@ -102,6 +136,20 @@ async def meta_webhook_event(
     except Exception:
         payload = {}
 
+    # Check for delivery / read receipts (Mejora 18)
+    for entry in payload.get("entry", []):
+        for msg_ev in entry.get("messaging", []):
+            if "read" in msg_ev:
+                sender_id = str(msg_ev.get("sender", {}).get("id") or "")
+                if sender_id:
+                    db_manager.update_activity_status(sender_id, "instagram", "read")
+                    db_manager.update_activity_status(sender_id, "facebook", "read")
+            elif "delivery" in msg_ev:
+                sender_id = str(msg_ev.get("sender", {}).get("id") or "")
+                if sender_id:
+                    db_manager.update_activity_status(sender_id, "instagram", "delivered")
+                    db_manager.update_activity_status(sender_id, "facebook", "delivered")
+
     # Ingest through ReaderAgent
     omni_msg = pipeline.reader.from_meta(payload)
 
@@ -110,8 +158,17 @@ async def meta_webhook_event(
 
     print(f"[Meta Gateway] Ingestando mensaje [{omni_msg.channel.upper()}] de {omni_msg.sender_id}: '{omni_msg.raw_text}'")
 
+    # Typing indicator (Mejora 15)
+    background_tasks.add_task(send_meta_typing_indicator, omni_msg.sender_id, settings.meta_access_token)
+
     # Critical 3-agent pipeline: Reader -> Analyzer -> Solver
     solution: SolverResponse = pipeline.process_message(omni_msg)
+
+    # Instagram Comment to Public Reply + Private DM (Mejora 16)
+    comment_id = omni_msg.metadata.get("comment_id")
+    if comment_id:
+        public_reply = "¡Hola! Te enviamos los detalles completos y aranceles a tu mensaje directo privado (DM) 🦷✨"
+        background_tasks.add_task(reply_public_instagram_comment, comment_id, public_reply, settings.meta_access_token)
 
     # Dispatch to Graph API
     await dispatch_meta_graph_reply(

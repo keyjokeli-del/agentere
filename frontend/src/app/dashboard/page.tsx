@@ -15,6 +15,7 @@ import {
   QrCode,
   ShieldCheck,
   UserCheck,
+  UserX,
   Stethoscope,
   Database,
   Trash2,
@@ -31,7 +32,15 @@ import {
   Cpu,
   BrainCircuit,
   Eye,
-  Activity as ActivityIcon
+  Activity as ActivityIcon,
+  Sun,
+  Moon,
+  Download,
+  Search,
+  CheckCheck,
+  Check,
+  Filter,
+  Globe
 } from 'lucide-react';
 import {
   ChannelType,
@@ -109,26 +118,69 @@ export default function Dashboard() {
   const [enteredPin, setEnteredPin] = useState<string>('');
   const [pinError, setPinError] = useState<string>('');
   const [activeDashboardTab, setActiveDashboardTab] = useState<'monitor' | 'pipeline' | 'media'>('monitor');
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [channelFilter, setChannelFilter] = useState<string>('all');
+  const [urgencyFilter, setUrgencyFilter] = useState<string>('all');
+  const [handoffLoading, setHandoffLoading] = useState<string | null>(null);
+  const [sseConnected, setSseConnected] = useState<boolean>(false);
 
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? sessionStorage.getItem('lumina_dashboard_auth') : null;
     if (saved === 'true') {
       setIsAuthenticated(true);
     }
+    const savedTheme = typeof window !== 'undefined' ? localStorage.getItem('lumina_theme') : null;
+    if (savedTheme) {
+      setIsDarkMode(savedTheme === 'dark');
+    }
     setIsAuthChecking(false);
   }, []);
 
-  const handlePinSubmit = (e: React.FormEvent) => {
+  const toggleTheme = () => {
+    const nextTheme = !isDarkMode;
+    setIsDarkMode(nextTheme);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('lumina_theme', nextTheme ? 'dark' : 'light');
+    }
+  };
+
+  const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (enteredPin.trim() === ADMIN_PIN) {
-      setIsAuthenticated(true);
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('lumina_dashboard_auth', 'true');
+    const pin = enteredPin.trim();
+    if (!pin) return;
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/verify-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.valid) {
+          setIsAuthenticated(true);
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('lumina_dashboard_auth', 'true');
+          }
+          setPinError('');
+          return;
+        }
       }
-      setPinError('');
-    } else {
       setPinError('PIN de seguridad clínico incorrecto. Intente nuevamente.');
       setEnteredPin('');
+    } catch {
+      // Offline fallback
+      if (pin === ADMIN_PIN) {
+        setIsAuthenticated(true);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('lumina_dashboard_auth', 'true');
+        }
+        setPinError('');
+      } else {
+        setPinError('Error de conexión o PIN incorrecto.');
+        setEnteredPin('');
+      }
     }
   };
 
@@ -267,6 +319,75 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [fetchBackendData, fetchWhatsAppStatus, fetchSlots, selectedDate]);
 
+  // SSE Stream Listener
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`${BACKEND_URL}/api/dashboard/stream`);
+      es.onopen = () => setSseConnected(true);
+      es.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.recent_activities) {
+            setActivities(payload.recent_activities);
+          }
+          if (payload.appointments) {
+            setAppointments(payload.appointments);
+          }
+        } catch {
+          // ignore
+        }
+      };
+      es.onerror = () => {
+        setSseConnected(false);
+        if (es) es.close();
+      };
+    } catch {
+      setSseConnected(false);
+    }
+    return () => {
+      if (es) es.close();
+    };
+  }, [isAuthenticated, BACKEND_URL]);
+
+  const handleToggleHandoff = async (senderId: string, currentStatus?: boolean) => {
+    setHandoffLoading(senderId);
+    try {
+      const method = currentStatus ? 'DELETE' : 'POST';
+      const res = await fetch(`${BACKEND_URL}/api/admin/handoff/${encodeURIComponent(senderId)}`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: 'Intervención manual desde Dashboard' })
+      });
+      if (res.ok) {
+        await fetchBackendData();
+      }
+    } catch (err) {
+      console.error('Error al alternar handoff:', err);
+    } finally {
+      setHandoffLoading(null);
+    }
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/export-csv`);
+      if (!res.ok) throw new Error('Error al generar CSV');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lumina_citas_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      alert('Error descargando el reporte CSV de citas.');
+    }
+  };
+
   const handleConnectWhatsApp = async () => {
     setIsConnectingWA(true);
     try {
@@ -372,6 +493,19 @@ export default function Dashboard() {
     setSimMessage(prompt);
   };
 
+  const filteredActivities = activities.filter(act => {
+    const q = searchQuery.toLowerCase().trim();
+    const matchQuery = !q ||
+      act.sender_name?.toLowerCase().includes(q) ||
+      act.sender_id?.toLowerCase().includes(q) ||
+      act.message?.toLowerCase().includes(q) ||
+      act.reply?.toLowerCase().includes(q);
+    
+    const matchChannel = channelFilter === 'all' || (act.channel && act.channel.toLowerCase() === channelFilter.toLowerCase());
+    const matchUrgency = urgencyFilter === 'all' || (act.urgency && act.urgency.toLowerCase() === urgencyFilter.toLowerCase());
+    return matchQuery && matchChannel && matchUrgency;
+  });
+
   if (isAuthChecking) {
     return (
       <div className="min-h-screen bg-abyssal flex items-center justify-center">
@@ -457,7 +591,9 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-abyssal text-diamond pb-16 selection:bg-cyan-bright selection:text-abyssal">
+    <div className={`min-h-screen pb-16 selection:bg-cyan-bright selection:text-abyssal transition-colors ${
+      isDarkMode ? 'bg-abyssal text-diamond' : 'bg-slate-900 text-slate-100'
+    }`}>
       {/* Top Header */}
       <header className="glass-panel border-b border-cyan-bright/20 sticky top-0 z-30 backdrop-blur-xl bg-sapphire-950/85">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -492,6 +628,13 @@ export default function Dashboard() {
                 {backendOnline ? 'FastAPI Render Online' : 'Backend Offline'}
               </span>
 
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
+                sseConnected ? 'bg-cyan-950/60 text-cyan-300 border-cyan-500/30' : 'bg-slate-900/60 text-slate-400 border-slate-700'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${sseConnected ? 'bg-cyan-400 animate-pulse' : 'bg-slate-500'}`} />
+                {sseConnected ? 'SSE Live Stream' : 'Polling Activo'}
+              </span>
+
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-sapphire-900/60 text-cyan-bright border border-cyan-bright/30">
                 <Sparkles className="w-3.5 h-3.5" /> Groq Llama 3.3
               </span>
@@ -500,6 +643,14 @@ export default function Dashboard() {
                 <CalendarIcon className="w-3.5 h-3.5" /> {calendarOnline}
               </span>
             </div>
+
+            <button
+              onClick={toggleTheme}
+              className="p-2 text-titanium-300 hover:text-white hover:bg-white/10 rounded-xl transition cursor-pointer border border-white/10"
+              title={isDarkMode ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
+            >
+              {isDarkMode ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4 text-cyan-300" />}
+            </button>
 
             <button
               onClick={() => {
@@ -939,6 +1090,234 @@ export default function Dashboard() {
               </section>
 
             </div>
+
+            {/* Omnichannel Activity Feed & Triage Table */}
+            <section className="glass-panel rounded-3xl border border-cyan-bright/25 shadow-2xl overflow-hidden bg-sapphire-950/90 p-5 sm:p-6 space-y-5">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-cyan-bright/20 text-cyan-bright flex items-center justify-center border border-cyan-bright/30">
+                      <ActivityIcon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h2 className="font-bold text-base text-white tracking-tight">
+                        Feed de Actividad Omnicanal en Vivo
+                      </h2>
+                      <p className="text-xs text-titanium-400">
+                        Eventos procesados por los 3 agentes en tiempo real • Checkmarks de entrega • Triage de Urgencia
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold border ${
+                    sseConnected ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/40' : 'bg-slate-900 text-slate-400 border-slate-700'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${sseConnected ? 'bg-cyan-400 animate-pulse' : 'bg-slate-500'}`} />
+                    {sseConnected ? 'SSE Live Stream' : 'Sondeo Activo'}
+                  </span>
+
+                  <span className="text-xs font-mono font-bold px-3 py-1 rounded-xl bg-purple-950/80 text-purple-300 border border-purple-500/30">
+                    {filteredActivities.length} registradas
+                  </span>
+
+                  <button
+                    onClick={handleExportCsv}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-cyan-bright hover:bg-cyan-bright/90 text-abyssal rounded-xl transition shadow-cyan-glow cursor-pointer"
+                    title="Exportar todas las citas y registros clínicos a CSV"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Exportar Citas CSV
+                  </button>
+                </div>
+              </div>
+
+              {/* Search & Filters Toolbar */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
+                {/* Search query input */}
+                <div className="sm:col-span-6 relative">
+                  <Search className="w-4 h-4 text-titanium-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Buscar por paciente, teléfono o mensaje..."
+                    className="w-full pl-9 pr-3 py-2 bg-sapphire-900/60 border border-white/15 rounded-xl text-xs font-semibold text-white placeholder-titanium-400 focus:outline-none focus:ring-1 focus:ring-cyan-bright transition"
+                  />
+                </div>
+
+                {/* Channel filter */}
+                <div className="sm:col-span-3">
+                  <select
+                    value={channelFilter}
+                    onChange={e => setChannelFilter(e.target.value)}
+                    aria-label="Filtrar por canal omnicanal"
+                    className="w-full px-3 py-2 bg-sapphire-900/60 border border-white/15 rounded-xl text-xs font-semibold text-white focus:outline-none focus:ring-1 focus:ring-cyan-bright cursor-pointer"
+                  >
+                    <option value="all">Todos los Canales</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="instagram">Instagram</option>
+                    <option value="facebook">Facebook</option>
+                    <option value="youtube">YouTube</option>
+                    <option value="telegram">Telegram</option>
+                    <option value="web">Web / Simulador</option>
+                  </select>
+                </div>
+
+                {/* Urgency filter */}
+                <div className="sm:col-span-3">
+                  <select
+                    value={urgencyFilter}
+                    onChange={e => setUrgencyFilter(e.target.value)}
+                    aria-label="Filtrar por nivel de urgencia clínica"
+                    className="w-full px-3 py-2 bg-sapphire-900/60 border border-white/15 rounded-xl text-xs font-semibold text-white focus:outline-none focus:ring-1 focus:ring-cyan-bright cursor-pointer"
+                  >
+                    <option value="all">Todas las Urgencias</option>
+                    <option value="URGENCIA">🚨 Triage: Urgencia</option>
+                    <option value="MODERADO">⚠️ Triage: Moderado</option>
+                    <option value="RUTINA">✓ Triage: Rutina</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Activities Feed List */}
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                {filteredActivities.length === 0 ? (
+                  <div className="text-center py-12 rounded-2xl bg-sapphire-900/20 border border-white/10 text-titanium-400 text-xs italic">
+                    No hay registros de actividad que coincidan con la búsqueda.
+                  </div>
+                ) : (
+                  filteredActivities.map((act) => {
+                    const sid = act.sender_id || act.sender_name;
+                    const isUrgent = (act.urgency || '').toUpperCase() === 'URGENCIA';
+                    const isModerate = (act.urgency || '').toUpperCase() === 'MODERADO';
+
+                    return (
+                      <div
+                        key={act.id}
+                        className={`p-4 rounded-2xl border transition-all space-y-3 ${
+                          act.handoff_active
+                            ? 'bg-amber-950/20 border-amber-500/40'
+                            : isUrgent
+                            ? 'bg-rose-950/20 border-rose-500/40'
+                            : 'bg-sapphire-900/40 border-white/10 hover:border-cyan-bright/30'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-white">{act.sender_name}</span>
+                            <span className="text-[10px] font-mono text-titanium-400">({sid})</span>
+
+                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-white/10 text-cyan-bright">
+                              {act.channel}
+                            </span>
+
+                            {/* Urgency Badge */}
+                            {isUrgent ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-950 text-rose-300 border border-rose-500/40 flex items-center gap-1">
+                                🚨 Urgencia
+                              </span>
+                            ) : isModerate ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-950 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                                ⚠️ Moderado
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                                ✓ Rutina
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 text-xs">
+                            {/* Latency Pill */}
+                            <span className="text-[10px] font-mono text-teal-300 bg-teal-950/60 px-2 py-0.5 rounded-md border border-teal-500/30">
+                              ⚡ {act.latency_ms || 240} ms
+                            </span>
+
+                            {/* Delivery Status Checkmarks */}
+                            <span className="inline-flex items-center" title={`Estado de entrega: ${act.delivery_status || 'delivered'}`}>
+                              {act.delivery_status === 'read' ? (
+                                <CheckCheck className="w-4 h-4 text-cyan-bright" />
+                              ) : act.delivery_status === 'sent' ? (
+                                <Check className="w-4 h-4 text-titanium-400" />
+                              ) : (
+                                <CheckCheck className="w-4 h-4 text-emerald-400" />
+                              )}
+                            </span>
+
+                            <span className="text-[11px] text-titanium-400 font-mono">
+                              {act.timestamp}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Message & Reply Context */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                          <div className="p-3 rounded-xl bg-abyssal/60 border border-white/10 space-y-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-titanium-400">
+                              Mensaje del Paciente:
+                            </span>
+                            <p className="text-white leading-relaxed">{act.message}</p>
+                          </div>
+
+                          <div className="p-3 rounded-xl bg-sapphire-950/80 border border-cyan-bright/20 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-bright">
+                                Respuesta IA ({act.agent || 'SolverAgent'}):
+                              </span>
+                              {act.intent && (
+                                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-950 text-purple-300 border border-purple-500/30">
+                                  {act.intent}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-titanium-200 leading-relaxed">{act.reply}</p>
+                          </div>
+                        </div>
+
+                        {/* Human Handoff Control Button */}
+                        <div className="flex items-center justify-between pt-1">
+                          <div className="text-[11px] text-titanium-400">
+                            {act.handoff_active ? (
+                              <span className="text-amber-300 font-semibold flex items-center gap-1">
+                                ⏸️ IA silenciada para este paciente. Requiere atención médica manual.
+                              </span>
+                            ) : (
+                              <span className="text-emerald-400/90 font-medium">
+                                🤖 Asistente multi-agente respondiendo activamente.
+                              </span>
+                            )}
+                          </div>
+
+                          <button
+                            onClick={() => handleToggleHandoff(sid, !!act.handoff_active)}
+                            disabled={handoffLoading === sid}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                              act.handoff_active
+                                ? 'bg-emerald-500 hover:bg-emerald-400 text-abyssal shadow-xs'
+                                : 'bg-white/5 hover:bg-rose-500/20 text-titanium-300 hover:text-rose-300 border border-white/10'
+                            }`}
+                          >
+                            {act.handoff_active ? (
+                              <>
+                                <UserCheck className="w-3.5 h-3.5" />
+                                {handoffLoading === sid ? 'Reactivando...' : 'Reanudar IA Automática'}
+                              </>
+                            ) : (
+                              <>
+                                <UserX className="w-3.5 h-3.5 text-rose-400" />
+                                {handoffLoading === sid ? 'Pausando...' : 'Intervención Humana (Pausar Bot)'}
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </section>
           </div>
         )}
 

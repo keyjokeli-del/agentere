@@ -12,6 +12,7 @@ from app.agents.solver_agent import (
     AppointmentAgent,
     CLINIC_CATALOG
 )
+from app.core.database import db_manager
 
 
 class TriageAgent:
@@ -23,8 +24,8 @@ class TriageAgent:
         analyzer: Optional[AnalyzerAgent] = None,
         memory_service: Optional[Any] = None
     ) -> None:
-        self.reader = reader or ReaderAgent()
-        self.analyzer = analyzer or AnalyzerAgent()
+        self.reader = reader or ReaderAgent(memory_service=memory_service)
+        self.analyzer = analyzer or AnalyzerAgent(memory_service=memory_service)
 
     def process(self, message: str, context: List[Dict[str, str]]) -> TriageResult:
         omni_msg = self.reader.from_text(message)
@@ -43,7 +44,7 @@ class TriageAgent:
 class OmniChannelPipeline:
     """Centralized orchestrator running the sequential 3-agent critical pipeline:
     ReaderAgent -> AnalyzerAgent -> SolverAgent
-    with Hybrid Memory and Neon PostgreSQL pgvector.
+    with Handoff verification, Timeout protection, and Activity Persistence in Neon PostgreSQL.
     """
 
     def __init__(
@@ -64,6 +65,18 @@ class OmniChannelPipeline:
         return self.sessions[session_id]
 
     def process_message(self, message: OmniChannelMessage) -> SolverResponse:
+        # 0. Check Human Handoff (Mejora 30)
+        if db_manager.is_handoff_active(message.sender_id):
+            return SolverResponse(
+                reply="[Pausa de Agente activa: Consulta atendida manualmente por el personal de recepción]",
+                channel=message.channel,
+                sender_id=message.sender_id,
+                intent="HUMAN_HANDOFF",
+                agent="HumanSupervisor",
+                action_taken="paused_human_handoff",
+                timestamp=datetime.now(timezone.utc).isoformat()
+            )
+
         session_id = f"{message.channel}:{message.sender_id}"
         history = self.get_or_create_session(session_id)
 
@@ -73,13 +86,23 @@ class OmniChannelPipeline:
 
         combined_history = history if history else message.recent_history
 
-        # 1. AnalyzerAgent (with RAG retrieval)
+        # 1. Unify patient identity across channels (Mejora 2)
+        try:
+            db_manager.get_or_link_patient_identity(
+                sender_id=message.sender_id,
+                channel=message.channel,
+                full_name=message.sender_name
+            )
+        except Exception:
+            pass
+
+        # 2. AnalyzerAgent (with RAG retrieval & Red Flag triage)
         analysis = self.analyzer.analyze(message, combined_history)
 
-        # 2. SolverAgent (solves, logs turns, extracts patient memory)
+        # 3. SolverAgent (solves, logs turns, extracts patient memory)
         solution = self.solver.solve(message, analysis, combined_history)
 
-        # 3. Update session cache
+        # 4. Update session cache
         history.append({"role": "user", "content": message.raw_text})
         history.append({"role": "assistant", "content": solution.reply})
         if len(self.sessions) > 100:
@@ -87,7 +110,22 @@ class OmniChannelPipeline:
             for old_k in list(self.sessions.keys())[:overflow]:
                 self.sessions.pop(old_k, None)
 
-        # 4. Trigger runtime cleanup (anti-bloat)
+        # 5. Persist activity in Neon PostgreSQL (Eliminates volatile in-memory state)
+        try:
+            db_manager.log_activity(
+                channel=message.channel,
+                sender_id=message.sender_id,
+                sender_name=message.sender_name,
+                message=message.raw_text,
+                reply=solution.reply,
+                agent=solution.agent,
+                intent=solution.intent,
+                status="delivered"
+            )
+        except Exception:
+            pass
+
+        # 6. Trigger runtime cleanup (anti-bloat)
         try:
             from app.core.cleanup import run_runtime_cleanup
             run_runtime_cleanup(force=False)

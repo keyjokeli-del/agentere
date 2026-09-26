@@ -1,7 +1,7 @@
 import os
 import re
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from app.config import settings
 from app.services.embedding_service import embedding_service
@@ -11,31 +11,108 @@ try:
 except ImportError:
     psycopg = None  # type: ignore[assignment]
 
+try:
+    from psycopg_pool import ConnectionPool  # type: ignore[assignment]
+    HAS_PSYCOPG_POOL = True
+except ImportError:
+    HAS_PSYCOPG_POOL = False
+
+
+class PooledConnectionWrapper:
+    """Wraps a psycopg connection borrowed from ConnectionPool to return it on close()."""
+
+    def __init__(self, conn: Any, pool: Any):
+        self._conn = conn
+        self._pool = pool
+        self._returned = False
+
+    def close(self) -> None:
+        if not self._returned and self._pool:
+            try:
+                self._pool.putconn(self._conn)
+            except Exception:
+                try:
+                    self._conn.close()
+                except Exception:
+                    pass
+            self._returned = True
+
+    def __enter__(self) -> Any:
+        return self._conn.__enter__()
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Any:
+        return self._conn.__exit__(exc_type, exc_val, exc_tb)
+
+    def cursor(self, *args: Any, **kwargs: Any) -> Any:
+        return self._conn.cursor(*args, **kwargs)
+
+    def commit(self) -> None:
+        self._conn.commit()
+
+    def rollback(self) -> None:
+        self._conn.rollback()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._conn, name)
+
 
 class DatabaseManager:
-    """Centralized database manager for Neon PostgreSQL with pgvector and in-memory fallback."""
+    """Centralized database manager for Neon PostgreSQL with pgvector, connection pooling, and in-memory fallback."""
 
     def __init__(self, database_url: Optional[str] = None, in_memory_only: bool = False):
         self.in_memory_only = in_memory_only
         self.database_url = "" if in_memory_only else (database_url if database_url is not None else settings.database_url)
         self._db_available: Optional[bool] = None
+        self._pool: Optional[Any] = None
 
         # Shared in-memory fallback stores
         self.in_memory_turns: Dict[str, List[Dict[str, str]]] = {}
         self.in_memory_knowledge: List[Dict[str, Any]] = []
         self.in_memory_patient_memories: Dict[str, List[Dict[str, Any]]] = {}
+        self.in_memory_activity_logs: List[Dict[str, Any]] = []
+        self.in_memory_patient_identities: Dict[str, Dict[str, Any]] = {}
+        self.in_memory_appointments_tracker: List[Dict[str, Any]] = []
+        self.in_memory_waitlist: List[Dict[str, Any]] = []
+        self.in_memory_handoffs: Dict[str, Dict[str, Any]] = {}
 
-    def get_connection(self):
-        """Attempts to obtain a live connection to Neon PostgreSQL."""
+        self._init_pool()
+
+    def _init_pool(self) -> None:
+        """Initializes psycopg_pool ConnectionPool if available and database_url is configured."""
+        if self.in_memory_only or not HAS_PSYCOPG_POOL or not self.database_url:
+            return
+        try:
+            # Pool configuration: min_size 1, max_size 4 to protect 512MB RAM and Neon connection limits
+            self._pool = ConnectionPool(
+                conninfo=self.database_url,
+                min_size=1,
+                max_size=4,
+                timeout=8.0,
+                open=True
+            )
+        except Exception as e:
+            print(f"[DatabaseManager] Pool init warning: {e}")
+            self._pool = None
+
+    def get_connection(self) -> Any:
+        """Attempts to obtain a live connection via pool or direct psycopg connection."""
         if self.in_memory_only or not psycopg or not self.database_url:
             return None
+
+        if self._pool:
+            try:
+                raw_conn = self._pool.getconn()
+                return PooledConnectionWrapper(raw_conn, self._pool)
+            except Exception:
+                pass
+
         try:
             return psycopg.connect(self.database_url, connect_timeout=5)
         except Exception:
             return None
 
     def init_db(self) -> bool:
-        """Enables pgvector extension and creates necessary tables in Neon Postgres."""
+        """Enables pgvector extension, creates necessary tables, and builds HNSW indexes."""
         conn = self.get_connection()
         if not conn:
             self._db_available = False
@@ -69,6 +146,9 @@ class DatabaseManager:
                             embedding vector(768),
                             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                         );
+                        CREATE INDEX IF NOT EXISTS idx_clinical_knowledge_hnsw 
+                        ON clinical_knowledge_vectors 
+                        USING hnsw (embedding vector_cosine_ops);
                     """)
 
                     # 3. Patient long-term memory vectors
@@ -83,14 +163,558 @@ class DatabaseManager:
                         );
                         CREATE INDEX IF NOT EXISTS idx_patient_memories_sender 
                         ON patient_memory_vectors(sender_id, created_at DESC);
+                        CREATE INDEX IF NOT EXISTS idx_patient_memory_hnsw 
+                        ON patient_memory_vectors 
+                        USING hnsw (embedding vector_cosine_ops);
                     """)
+
+                    # 4. Activity Logs (Eliminates volatile RECENT_ACTIVITIES in memory)
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS activity_logs (
+                            id SERIAL PRIMARY KEY,
+                            channel VARCHAR(50) NOT NULL,
+                            sender_id VARCHAR(100) NOT NULL,
+                            sender_name VARCHAR(150),
+                            message TEXT NOT NULL,
+                            reply TEXT NOT NULL,
+                            agent VARCHAR(50) NOT NULL,
+                            intent VARCHAR(50) NOT NULL,
+                            status VARCHAR(20) DEFAULT 'delivered',
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                        );
+                        CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at 
+                        ON activity_logs(created_at DESC);
+                    """)
+
+                    # 5. Patient Identities (Cross-channel profile unification)
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS patient_identities (
+                            id SERIAL PRIMARY KEY,
+                            phone VARCHAR(50) UNIQUE,
+                            email VARCHAR(100),
+                            full_name VARCHAR(150),
+                            instagram_id VARCHAR(100),
+                            facebook_id VARCHAR(100),
+                            telegram_id VARCHAR(100),
+                            youtube_id VARCHAR(100),
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                        );
+                        CREATE INDEX IF NOT EXISTS idx_patient_identities_phone 
+                        ON patient_identities(phone);
+                    """)
+
+                    # 6. Appointments Tracker (Anti No-Show & Dynamic Duration)
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS appointments_tracker (
+                            id SERIAL PRIMARY KEY,
+                            appt_id VARCHAR(100) UNIQUE NOT NULL,
+                            patient_name VARCHAR(150) NOT NULL,
+                            contact VARCHAR(100) NOT NULL,
+                            treatment VARCHAR(100) NOT NULL,
+                            doctor VARCHAR(150) DEFAULT 'Dra. Nairoby Domínguez',
+                            appointment_date DATE NOT NULL,
+                            appointment_time VARCHAR(10) NOT NULL,
+                            duration_min INT DEFAULT 45,
+                            channel VARCHAR(50) DEFAULT 'manual',
+                            status VARCHAR(20) DEFAULT 'tentative',
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                        );
+                        CREATE INDEX IF NOT EXISTS idx_appointments_tracker_date 
+                        ON appointments_tracker(appointment_date, appointment_time);
+                    """)
+
+                    # 7. Waitlist Entries (Auto-Fill for cancellations)
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS waitlist_entries (
+                            id SERIAL PRIMARY KEY,
+                            patient_name VARCHAR(150) NOT NULL,
+                            contact VARCHAR(100) NOT NULL,
+                            treatment VARCHAR(100) NOT NULL,
+                            preferred_date DATE NOT NULL,
+                            preferred_time VARCHAR(10),
+                            channel VARCHAR(50) DEFAULT 'whatsapp',
+                            status VARCHAR(20) DEFAULT 'waiting',
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                        );
+                        CREATE INDEX IF NOT EXISTS idx_waitlist_entries_date 
+                        ON waitlist_entries(preferred_date, status);
+                    """)
+
+                    # 8. Human Handoffs (Pause bot for 30m)
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS human_handoffs (
+                            id SERIAL PRIMARY KEY,
+                            sender_id VARCHAR(100) UNIQUE NOT NULL,
+                            channel VARCHAR(50) NOT NULL,
+                            paused_until TIMESTAMP WITH TIME ZONE NOT NULL,
+                            paused_by VARCHAR(100) DEFAULT 'admin',
+                            reason TEXT,
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                        );
+                        CREATE INDEX IF NOT EXISTS idx_human_handoffs_sender 
+                        ON human_handoffs(sender_id);
+                    """)
+
             self._db_available = True
             return True
-        except Exception:
+        except Exception as e:
+            print(f"[DatabaseManager] init_db warning: {e}")
             self._db_available = False
             return False
         finally:
             conn.close()
+
+    def log_activity(
+        self,
+        channel: str,
+        sender_id: str,
+        sender_name: Optional[str],
+        message: str,
+        reply: str,
+        agent: str,
+        intent: str,
+        status: str = "delivered"
+    ) -> Dict[str, Any]:
+        """Persists omni-channel activity in Neon PostgreSQL with in-memory fallback."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        act_entry = {
+            "id": f"act-{len(self.in_memory_activity_logs) + 1}",
+            "channel": channel,
+            "sender_id": sender_id,
+            "sender_name": sender_name or sender_id,
+            "message": message,
+            "reply": reply,
+            "agent": agent,
+            "intent": intent,
+            "status": status,
+            "timestamp": now_iso
+        }
+        self.in_memory_activity_logs.insert(0, act_entry)
+        if len(self.in_memory_activity_logs) > 100:
+            self.in_memory_activity_logs.pop()
+
+        conn = self.get_connection()
+        if conn:
+            try:
+                with conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            INSERT INTO activity_logs (channel, sender_id, sender_name, message, reply, agent, intent, status)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            RETURNING id, created_at;
+                            """,
+                            (channel, sender_id, sender_name or sender_id, message, reply, agent, intent, status)
+                        )
+                        row = cur.fetchone()
+                        if row:
+                            act_entry["id"] = f"act-{row[0]}"
+                            act_entry["timestamp"] = row[1].isoformat() if hasattr(row[1], 'isoformat') else now_iso
+            except Exception:
+                pass
+            finally:
+                conn.close()
+
+        return act_entry
+
+    def get_recent_activities(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Retrieves recent activities from Neon PostgreSQL or fallback."""
+        conn = self.get_connection()
+        if conn:
+            try:
+                with conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            SELECT id, channel, sender_id, sender_name, message, reply, agent, intent, status, created_at
+                            FROM activity_logs
+                            ORDER BY created_at DESC
+                            LIMIT %s;
+                            """,
+                            (limit,)
+                        )
+                        rows = cur.fetchall()
+                        if rows:
+                            return [
+                                {
+                                    "id": f"act-{r[0]}",
+                                    "channel": r[1],
+                                    "sender_id": r[2],
+                                    "sender_name": r[3],
+                                    "message": r[4],
+                                    "reply": r[5],
+                                    "agent": r[6],
+                                    "intent": r[7],
+                                    "status": r[8] or "delivered",
+                                    "timestamp": r[9].isoformat() if hasattr(r[9], 'isoformat') else str(r[9])
+                                }
+                                for r in rows
+                            ]
+            except Exception:
+                pass
+            finally:
+                conn.close()
+
+        return self.in_memory_activity_logs[:limit]
+
+    def update_activity_status(self, sender_id: str, channel: str, status: str = "read") -> bool:
+        """Updates delivery/read status of recent logs."""
+        for act in self.in_memory_activity_logs:
+            if act["sender_id"] == sender_id and act["channel"] == channel:
+                act["status"] = status
+
+        conn = self.get_connection()
+        if not conn:
+            return True
+
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE activity_logs
+                        SET status = %s
+                        WHERE sender_id = %s AND channel = %s
+                          AND id IN (
+                              SELECT id FROM activity_logs
+                              WHERE sender_id = %s AND channel = %s
+                              ORDER BY created_at DESC LIMIT 5
+                          );
+                        """,
+                        (status, sender_id, channel, sender_id, channel)
+                    )
+            return True
+        except Exception:
+            return False
+        finally:
+            conn.close()
+
+    def get_or_link_patient_identity(
+        self,
+        phone: Optional[str] = None,
+        sender_id: Optional[str] = None,
+        channel: Optional[str] = None,
+        full_name: Optional[str] = None,
+        email: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Unifies patient profile across channels based on phone or channel ID."""
+        key = phone or sender_id
+        if not key:
+            return None
+
+        # Check in-memory store
+        for p_id, p_data in self.in_memory_patient_identities.items():
+            if phone and p_data.get("phone") == phone:
+                if full_name:
+                    p_data["full_name"] = full_name
+                if channel == "instagram" and sender_id:
+                    p_data["instagram_id"] = sender_id
+                elif channel == "telegram" and sender_id:
+                    p_data["telegram_id"] = sender_id
+                return p_data
+
+        record: Dict[str, Any] = {
+            "phone": phone,
+            "email": email,
+            "full_name": full_name or "Paciente",
+            "instagram_id": sender_id if channel == "instagram" else None,
+            "facebook_id": sender_id if channel == "facebook" else None,
+            "telegram_id": sender_id if channel == "telegram" else None,
+            "youtube_id": sender_id if channel == "youtube" else None,
+        }
+        self.in_memory_patient_identities[key] = record
+
+        conn = self.get_connection()
+        if conn:
+            try:
+                with conn:
+                    with conn.cursor() as cur:
+                        if phone:
+                            cur.execute(
+                                """
+                                INSERT INTO patient_identities (phone, email, full_name, instagram_id, facebook_id, telegram_id, youtube_id)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                ON CONFLICT (phone) DO UPDATE SET
+                                    full_name = COALESCE(EXCLUDED.full_name, patient_identities.full_name),
+                                    email = COALESCE(EXCLUDED.email, patient_identities.email),
+                                    instagram_id = COALESCE(EXCLUDED.instagram_id, patient_identities.instagram_id),
+                                    telegram_id = COALESCE(EXCLUDED.telegram_id, patient_identities.telegram_id),
+                                    updated_at = CURRENT_TIMESTAMP
+                                RETURNING phone, email, full_name, instagram_id, facebook_id, telegram_id;
+                                """,
+                                (phone, email, full_name, record["instagram_id"], record["facebook_id"], record["telegram_id"], record["youtube_id"])
+                            )
+                            row = cur.fetchone()
+                            if row:
+                                return {
+                                    "phone": row[0],
+                                    "email": row[1],
+                                    "full_name": row[2],
+                                    "instagram_id": row[3],
+                                    "facebook_id": row[4],
+                                    "telegram_id": row[5]
+                                }
+            except Exception:
+                pass
+            finally:
+                conn.close()
+
+        return record
+
+    def is_handoff_active(self, sender_id: str) -> bool:
+        """Checks if human handoff is currently paused for this sender_id."""
+        now = datetime.now(timezone.utc)
+        mem = self.in_memory_handoffs.get(sender_id)
+        if mem and mem.get("paused_until") and mem["paused_until"] > now:
+            return True
+
+        conn = self.get_connection()
+        if not conn:
+            return False
+
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT paused_until FROM human_handoffs
+                        WHERE sender_id = %s AND paused_until > CURRENT_TIMESTAMP;
+                        """,
+                        (sender_id,)
+                    )
+                    row = cur.fetchone()
+                    return bool(row)
+        except Exception:
+            return False
+        finally:
+            conn.close()
+
+    def set_human_handoff(
+        self,
+        sender_id: str,
+        channel: str,
+        minutes: int = 30,
+        reason: Optional[str] = "Pausado por recepcionista"
+    ) -> bool:
+        """Pauses AI bot for 30 minutes for a specific patient."""
+        paused_until = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+        self.in_memory_handoffs[sender_id] = {
+            "channel": channel,
+            "paused_until": paused_until,
+            "reason": reason
+        }
+
+        conn = self.get_connection()
+        if not conn:
+            return True
+
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO human_handoffs (sender_id, channel, paused_until, reason)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (sender_id) DO UPDATE SET
+                            paused_until = EXCLUDED.paused_until,
+                            reason = EXCLUDED.reason;
+                        """,
+                        (sender_id, channel, paused_until, reason)
+                    )
+            return True
+        except Exception:
+            return True
+        finally:
+            conn.close()
+
+    def clear_human_handoff(self, sender_id: str) -> bool:
+        """Re-activates AI bot for a patient."""
+        self.in_memory_handoffs.pop(sender_id, None)
+
+        conn = self.get_connection()
+        if not conn:
+            return True
+
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM human_handoffs WHERE sender_id = %s;", (sender_id,))
+            return True
+        except Exception:
+            return True
+        finally:
+            conn.close()
+
+    def record_appointment(
+        self,
+        appt_id: str,
+        patient_name: str,
+        contact: str,
+        treatment: str,
+        doctor: str,
+        appointment_date: str,
+        appointment_time: str,
+        duration_min: int = 45,
+        channel: str = "whatsapp",
+        status: str = "tentative"
+    ) -> bool:
+        """Stores appointment in Neon DB appointments_tracker."""
+        entry = {
+            "appt_id": appt_id,
+            "patient_name": patient_name,
+            "contact": contact,
+            "treatment": treatment,
+            "doctor": doctor,
+            "date": appointment_date,
+            "time": appointment_time,
+            "duration_min": duration_min,
+            "channel": channel,
+            "status": status
+        }
+        self.in_memory_appointments_tracker.append(entry)
+
+        conn = self.get_connection()
+        if not conn:
+            return True
+
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO appointments_tracker (
+                            appt_id, patient_name, contact, treatment, doctor, 
+                            appointment_date, appointment_time, duration_min, channel, status
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s::date, %s, %s, %s, %s)
+                        ON CONFLICT (appt_id) DO UPDATE SET
+                            status = EXCLUDED.status,
+                            doctor = EXCLUDED.doctor;
+                        """,
+                        (appt_id, patient_name, contact, treatment, doctor, appointment_date, appointment_time, duration_min, channel, status)
+                    )
+            return True
+        except Exception:
+            return True
+        finally:
+            conn.close()
+
+    def update_appointment_status(self, contact: str, status: str) -> bool:
+        """Updates appointment status (e.g. 'confirmed' or 'cancelled') based on patient contact."""
+        updated = False
+        for appt in self.in_memory_appointments_tracker:
+            if appt["contact"] == contact or contact in appt["contact"]:
+                appt["status"] = status
+                updated = True
+
+        conn = self.get_connection()
+        if not conn:
+            return updated
+
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE appointments_tracker
+                        SET status = %s
+                        WHERE contact = %s
+                          AND id IN (
+                              SELECT id FROM appointments_tracker
+                              WHERE contact = %s
+                              ORDER BY appointment_date DESC LIMIT 1
+                          );
+                        """,
+                        (status, contact, contact)
+                    )
+            return True
+        except Exception:
+            return updated
+        finally:
+            conn.close()
+
+    def add_to_waitlist(
+        self,
+        patient_name: str,
+        contact: str,
+        treatment: str,
+        preferred_date: str,
+        preferred_time: Optional[str] = None,
+        channel: str = "whatsapp"
+    ) -> bool:
+        """Adds a patient to the auto-fill waitlist."""
+        self.in_memory_waitlist.append({
+            "patient_name": patient_name,
+            "contact": contact,
+            "treatment": treatment,
+            "preferred_date": preferred_date,
+            "preferred_time": preferred_time,
+            "channel": channel,
+            "status": "waiting"
+        })
+
+        conn = self.get_connection()
+        if not conn:
+            return True
+
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO waitlist_entries (patient_name, contact, treatment, preferred_date, preferred_time, channel, status)
+                        VALUES (%s, %s, %s, %s::date, %s, %s, 'waiting');
+                        """,
+                        (patient_name, contact, treatment, preferred_date, preferred_time, channel)
+                    )
+            return True
+        except Exception:
+            return True
+        finally:
+            conn.close()
+
+    def check_waitlist_for_cancellation(self, cancelled_date: str) -> List[Dict[str, Any]]:
+        """Returns waiting patients for a cancelled date."""
+        matches = []
+        for w in self.in_memory_waitlist:
+            if w["preferred_date"] == cancelled_date and w["status"] == "waiting":
+                w["status"] = "notified"
+                matches.append(w)
+
+        conn = self.get_connection()
+        if conn:
+            try:
+                with conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            UPDATE waitlist_entries
+                            SET status = 'notified'
+                            WHERE preferred_date = %s::date AND status = 'waiting'
+                            RETURNING patient_name, contact, treatment, preferred_date, preferred_time, channel;
+                            """,
+                            (cancelled_date,)
+                        )
+                        rows = cur.fetchall()
+                        if rows:
+                            return [
+                                {
+                                    "patient_name": r[0],
+                                    "contact": r[1],
+                                    "treatment": r[2],
+                                    "preferred_date": str(r[3]),
+                                    "preferred_time": r[4],
+                                    "channel": r[5]
+                                }
+                                for r in rows
+                            ]
+            except Exception:
+                pass
+            finally:
+                conn.close()
+
+        return matches
 
     def seed_clinical_knowledge(self) -> int:
         """Seeds Lumina clinical catalog and post-operative care guides."""
@@ -98,7 +722,7 @@ class DatabaseManager:
             # Catalog Treatments
             {
                 "topic": "Limpieza Dental y Profilaxis",
-                "content": "Limpieza Dental y Profilaxis con Ultrasonido: 45 min de duración. Rango de precio: $30 - $45 USD. Procedimiento de eliminación completa de sarro, placa bacteriana y pulido dental para prevenir caries y gingivitis."
+                "content": "Limpieza Dental y Profilaxis con Ultrasonido: 30 min de duración. Rango de precio: $30 - $45 USD. Procedimiento de eliminación completa de sarro, placa bacteriana y pulido dental para prevenir caries y gingivitis."
             },
             {
                 "topic": "Blanqueamiento Dental LED",
@@ -110,11 +734,11 @@ class DatabaseManager:
             },
             {
                 "topic": "Implantes Dentales de Titanio",
-                "content": "Implantes Dentales de Titanio: 60 min por intervención. Rango de precio: $350 - $600 USD por pieza. Reemplazo permanente de piezas dentales perdidas con tornillo de titanio biocompatible y corona estética."
+                "content": "Implantes Dentales de Titanio: 90 min por intervención. Rango de precio: $350 - $600 USD por pieza. Reemplazo permanente de piezas dentales perdidas con tornillo de titanio biocompatible y corona estética."
             },
             {
                 "topic": "Endodoncia Tratamiento de Conducto",
-                "content": "Endodoncia (Tratamiento de Conducto): 60 min de duración. Rango de precio: $80 - $140 USD. Procedimiento para eliminar la infección del nervio dental conservando la pieza dental natural y aliviando el dolor."
+                "content": "Endodoncia (Tratamiento de Conducto): 90 min de duración. Rango de precio: $80 - $140 USD. Procedimiento para eliminar la infección del nervio dental conservando la pieza dental natural y aliviando el dolor."
             },
             {
                 "topic": "Extracción Simple y Muelas del Juicio",
