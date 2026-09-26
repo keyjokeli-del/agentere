@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request, HTTPException, Query, Header
 import httpx
 
 from app.config import settings
-from app.agents.dental_agents import pipeline
+from app.agents import pipeline
 from app.models.dental_models import SolverResponse
 
 router = APIRouter(tags=["Meta Social Gateway"])

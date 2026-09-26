@@ -1,20 +1,64 @@
 import pytest
-from app.services.rag_memory_service import RAGMemoryService
-from app.agents.dental_agents import (
+from typing import Optional, List, Dict, Any
+from app.core.database import DatabaseManager
+from app.services.embedding_service import embedding_service
+from app.agents import (
     ReaderAgent,
+    ReaderMemory,
     AnalyzerAgent,
+    AnalyzerMemory,
     SolverAgent,
-    OmniChannelPipeline
+    SolverMemory,
+    OmniChannelPipeline,
+    OmniChannelMessage,
+    ClinicalAnalysis
 )
-from app.models.dental_models import OmniChannelMessage, ClinicalAnalysis
 from app.services.calendar_service import CalendarService, calendar_service
+
 
 @pytest.fixture
 def isolated_memory():
-    """Provides an isolated in-memory RAGMemoryService instance for tests."""
-    mem = RAGMemoryService(in_memory_only=True)
-    mem.seed_clinical_knowledge()
-    return mem
+    """Provides an isolated in-memory hybrid memory composed of ReaderMemory, AnalyzerMemory, and SolverMemory."""
+    db = DatabaseManager(in_memory_only=True)
+    db.seed_clinical_knowledge()
+    reader_mem = ReaderMemory(db=db)
+    analyzer_mem = AnalyzerMemory(db=db, embedder=embedding_service)
+    solver_mem = SolverMemory(db=db, embedder=embedding_service)
+
+    class CombinedMemory:
+        def __init__(self):
+            self.db = db
+            self.reader_memory = reader_mem
+            self.analyzer_memory = analyzer_mem
+            self.solver_memory = solver_mem
+
+        def embed_text(self, text: str):
+            return embedding_service.embed_text(text)
+
+        def add_turn(self, channel: str, sender_id: Optional[str] = None, role: str = "user", content: str = "", sender: Optional[str] = None):
+            target = sender_id if sender_id is not None else (sender or "")
+            return self.solver_memory.add_turn(channel=channel, sender_id=target, role=role, content=content)
+
+        def get_recent_turns(self, channel: str, sender_id: Optional[str] = None, limit: int = 4, sender: Optional[str] = None):
+            target = sender_id if sender_id is not None else (sender or "")
+            return self.reader_memory.get_recent_turns(channel=channel, sender_id=target, limit=limit)
+
+        def search_clinical_knowledge(self, query: str, top_k: int = 3):
+            return self.analyzer_memory.search_clinical_knowledge(query, top_k=top_k)
+
+        def search_patient_memories(self, sender: str, query: str, top_k: int = 3):
+            return self.analyzer_memory.search_patient_memories(sender, query, top_k=top_k)
+
+        def add_patient_memory(self, sender_id: str, patient_name: str, memory_text: str):
+            return self.solver_memory.add_patient_memory(sender_id, patient_name, memory_text)
+
+        def init_db(self):
+            return self.db.init_db()
+
+        def seed_clinical_knowledge(self):
+            return self.db.seed_clinical_knowledge()
+
+    return CombinedMemory()
 
 
 @pytest.fixture(autouse=True)
@@ -212,9 +256,8 @@ def test_neon_pgvector_database_integration():
     from app.config import settings
     if not settings.database_url:
         pytest.skip("DATABASE_URL not configured")
-    live_mem = RAGMemoryService(in_memory_only=False)
-    ok = live_mem.init_db()
+    live_db = DatabaseManager(in_memory_only=False)
+    ok = live_db.init_db()
     assert ok is True
-    seeded = live_mem.seed_clinical_knowledge()
+    seeded = live_db.seed_clinical_knowledge()
     assert seeded >= 6
-

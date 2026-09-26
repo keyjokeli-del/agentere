@@ -4,7 +4,8 @@
   "description": "Puente de WhatsApp con Baileys para el sistema multi-agente de clínica dental",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node --test tests/test_phase3_baileys.js && node tests/test_neon_auth.js && node tests/test_neon_integration.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.19",

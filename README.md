@@ -71,26 +71,50 @@ flowchart TD
 ```text
 agentere/
 ├── .github/workflows/
-│   └── ci.yml                     # Pipeline de CI/CD (Pytest, MyPy, Tests Node.js, Build Next.js)
-├── backend/                       # Núcleo de agentes y API REST en Python
+│   └── ci.yml                     # Pipeline de CI/CD (Pytest 30 tests, MyPy, Tests Node.js, Build Next.js)
+├── backend/                       # Núcleo modular de agentes y API REST en Python
 │   ├── app/
-│   │   ├── agents/
-│   │   │   └── dental_agents.py   # Coordinador, TriageAgent, FAQAgent y AppointmentAgent
+│   │   ├── agents/                # Arquitectura Modular de 3 Agentes + Memoria Híbrida
+│   │   │   ├── reader_agent/      # Agente 1 ("El que lee"): normalización omnicanal y sliding window
+│   │   │   │   ├── schemas.py     # OmniChannelMessage
+│   │   │   │   ├── memory.py      # ReaderMemory (conversation_turns en Neon Postgres)
+│   │   │   │   └── agent.py       # ReaderAgent (WhatsApp, Meta, YouTube, Web)
+│   │   │   ├── analyzer_agent/    # Agente 2 ("El que ve el problema"): diagnóstico y RAG Vectorial
+│   │   │   │   ├── schemas.py     # ClinicalAnalysis
+│   │   │   │   ├── memory.py      # AnalyzerMemory (pgvector <=> cosine similarity search)
+│   │   │   │   └── agent.py       # AnalyzerAgent (Groq Llama 3.3 + fallback determinista)
+│   │   │   ├── solver_agent/      # Agente 3 ("El que resuelve"): solución empática y persistencia
+│   │   │   │   ├── schemas.py     # SolverResponse, Treatment, GeneralFAQ, ClinicCatalog, TriageResult
+│   │   │   │   ├── memory.py      # SolverMemory (persistencia de turnos y memoria clínica de pacientes)
+│   │   │   │   └── agent.py       # SolverAgent, DentalFAQAgent y AppointmentAgent
+│   │   │   ├── orchestrator.py    # OmniChannelPipeline, DentalAgentCoordinator y TriageAgent
+│   │   │   └── __init__.py        # Re-exportaciones públicas limpias
+│   │   ├── core/                  # Infraestructura compartida de base de datos
+│   │   │   └── database.py        # DatabaseManager: conexión a Neon Postgres, DDL y seeding
 │   │   ├── services/
+│   │   │   ├── embedding_service.py # Generador de embeddings (Gemini 768 / fallback determinista)
 │   │   │   ├── groq_service.py    # Cliente Groq Cloud con fallback por rate-limit
-│   │   │   └── calendar_service.py# Google Calendar API con soporte GOOGLE_CREDENTIALS_JSON
+│   │   │   └── calendar_service.py# Google Calendar API con bloqueo anti-colisión
+│   │   ├── social_gateways/       # Gateways omnicanales
+│   │   │   ├── meta.py            # Instagram Direct y Facebook Messenger (Webhooks + HMAC)
+│   │   │   └── youtube.py         # YouTube Comments (Data API v3)
+│   │   ├── models/
+│   │   │   └── dental_models.py   # Modelos Pydantic unificados y retrocompatibles
 │   │   ├── data/
 │   │   │   └── clinic_info.json   # Catálogo clínico de tratamientos y precios
 │   │   ├── config.py              # Validación de configuración y entornos
 │   │   └── main.py                # Servidor FastAPI, endpoints REST y webhooks
-│   ├── tests/                     # Suite de pruebas unitarias y colisiones (12 tests)
+│   ├── tests/                     # Suite completa de 30 tests unitarios, RAG y E2E
 │   ├── Dockerfile                 # Multi-stage ultra-liviano (Python 3.11-slim, < 150MB RAM)
 │   ├── .dockerignore
 │   └── requirements.txt           # Dependencias de producción fijadas
 ├── whatsapp-service/              # Microservicio de WhatsApp con Baileys
 │   ├── index.js                   # WebSocket de WhatsApp, generador de QR y reenvío
 │   ├── neonAuthState.js           # Adaptador de persistencia Signal en Neon Postgres
-│   ├── test_neon_auth.js          # Pruebas de serialización criptográfica (Node.js test runner)
+│   ├── tests/                     # Suite de pruebas organizada
+│   │   ├── test_neon_auth.js      # Pruebas de serialización criptográfica
+│   │   ├── test_neon_integration.js # Validación de esquema relacional
+│   │   └── test_phase3_baileys.js # Pruebas con Node.js test runner
 │   ├── Dockerfile                 # Multi-stage Alpine (Node.js 20, límite de heap 256MB)
 │   ├── .dockerignore
 │   └── package.json

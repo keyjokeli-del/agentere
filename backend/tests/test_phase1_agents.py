@@ -1,6 +1,6 @@
 import pytest
 from app.models.dental_models import ClinicCatalog, Treatment, TriageResult, AgentResponse
-from app.agents.dental_agents import TriageAgent, DentalFAQAgent, DentalAgentCoordinator
+from app.agents import TriageAgent, DentalFAQAgent, DentalAgentCoordinator
 from app.services.groq_service import GroqService
 
 def test_pydantic_catalog_and_triage_models():

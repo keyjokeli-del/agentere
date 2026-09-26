@@ -4,7 +4,7 @@ from fastapi import APIRouter, Request, HTTPException
 import httpx
 
 from app.config import settings
-from app.agents.dental_agents import pipeline
+from app.agents import pipeline
 from app.models.dental_models import SolverResponse
 
 router = APIRouter(tags=["YouTube Social Gateway"])

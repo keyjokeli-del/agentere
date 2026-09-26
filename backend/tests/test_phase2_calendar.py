@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from fastapi.testclient import TestClient
 from app.main import app
 from app.services.calendar_service import CalendarService, calendar_service
-from app.agents.dental_agents import AppointmentAgent
+from app.agents import AppointmentAgent
 from app.models.dental_models import TriageResult
 
 client = TestClient(app)

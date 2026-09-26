@@ -1,6 +1,6 @@
 import pytest
 from datetime import date, timedelta
-from app.agents.dental_agents import (
+from app.agents import (
     ReaderAgent,
     AnalyzerAgent,
     SolverAgent,

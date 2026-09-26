@@ -2,8 +2,8 @@ const assert = require('assert');
 const { test, describe, before, after } = require('node:test');
 const http = require('http');
 const { BufferJSON, initAuthCreds } = require('@whiskeysockets/baileys');
-const { useNeonAuthState } = require('./neonAuthState');
-const { app, calculateBackoffDelay } = require('./index');
+const { useNeonAuthState } = require('../neonAuthState');
+const { app, calculateBackoffDelay } = require('../index');
 
 describe('Fase 3: Microservicio WhatsApp Baileys & Neon Postgres', () => {
 

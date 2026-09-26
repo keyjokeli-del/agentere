@@ -6,9 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.config import settings
-from app.agents.dental_agents import coordinator, pipeline
+from app.agents import coordinator, pipeline
 from app.services.calendar_service import calendar_service
-from app.services.rag_memory_service import rag_memory_service
+from app.core.database import db_manager
 from app.models.dental_models import AppointmentRecord, AppointmentCreateRequest, SlotsResponse
 from app.social_gateways.meta import router as meta_router
 from app.social_gateways.youtube import router as youtube_router
@@ -52,9 +52,9 @@ class CreateAppointmentRequest(BaseModel):
 @app.on_event("startup")
 def on_startup():
     try:
-        rag_memory_service.seed_clinical_knowledge()
+        db_manager.seed_clinical_knowledge()
     except Exception as e:
-        print(f"[Main Startup] Notice: RAG memory service init warning: {e}")
+        print(f"[Main Startup] Notice: Database knowledge seed warning: {e}")
 
 @app.get("/")
 def health_check():
@@ -63,7 +63,7 @@ def health_check():
         "clinic": settings.clinic_name,
         "groq_configured": bool(settings.groq_api_key),
         "google_calendar_configured": bool(calendar_service.service is not None),
-        "rag_memory_configured": bool(rag_memory_service._db_available or rag_memory_service._in_memory_knowledge),
+        "rag_memory_configured": bool(db_manager._db_available or db_manager.in_memory_knowledge),
         "channels": ["whatsapp", "facebook", "instagram", "youtube"]
     }
 

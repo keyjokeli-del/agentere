@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from fastapi.testclient import TestClient
 from app.main import app
 from app.services.calendar_service import calendar_service
-from app.agents.dental_agents import coordinator
+from app.agents import coordinator
 
 client = TestClient(app)
 
