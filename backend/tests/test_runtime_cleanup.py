@@ -68,8 +68,15 @@ def test_perform_cleanup_and_gc():
 
 
 def test_admin_cleanup_endpoint():
-    """Validates FastAPI endpoint POST /api/admin/cleanup returns 200 with cleanup report."""
-    response = client.post("/api/admin/cleanup")
+    """Validates FastAPI endpoint POST /api/admin/cleanup rejects unauthorized calls and accepts valid keys."""
+    # 1. Unauthorized request without header -> 403 Forbidden
+    unauthorized_res = client.post("/api/admin/cleanup")
+    assert unauthorized_res.status_code == 403
+    assert "Forbidden" in unauthorized_res.json()["detail"]
+
+    # 2. Authorized request with valid X-Admin-Key -> 200 OK
+    headers = {"X-Admin-Key": "lumina_admin_2026"}
+    response = client.post("/api/admin/cleanup", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "completed"

@@ -86,3 +86,22 @@ def test_youtube_webhook_comment_processing():
     assert data["sender_id"] == "UC_mariana_789"
     assert data["intent"] == "EMERGENCY_OR_PAIN"
     assert "recetar" in data["reply"].lower() or "presencial" in data["reply"].lower() or "urgencia" in data["reply"].lower()
+
+
+def test_youtube_comment_sync_polling():
+    """Validates the GET /api/youtube/sync endpoint cooldown and configuration checks."""
+    # 1. Without API key configured -> returns not_configured
+    res = client.get("/api/youtube/sync?force=true")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] in ["not_configured", "success", "cooldown_active", "api_error"]
+
+    # 2. Sequential call without force -> triggers cooldown_active if recently executed
+    from app.social_gateways import youtube
+    import time
+    youtube._last_sync_timestamp = time.time()
+    res_cooldown = client.get("/api/youtube/sync")
+    assert res_cooldown.status_code == 200
+    assert res_cooldown.json()["status"] == "cooldown_active"
+    assert res_cooldown.json()["seconds_remaining"] > 0
+

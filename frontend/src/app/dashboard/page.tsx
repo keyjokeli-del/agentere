@@ -21,7 +21,8 @@ import {
   ChevronRight,
   LogOut,
   Power,
-  CalendarCheck
+  CalendarCheck,
+  Lock
 } from 'lucide-react';
 import {
   ChannelType,
@@ -60,6 +61,43 @@ const QUICK_PROMPTS = [
 ];
 
 export default function Dashboard() {
+  // Security PIN Access Gate (Restricts /dashboard to clinic staff)
+  const ADMIN_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN || '2026';
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+  const [enteredPin, setEnteredPin] = useState<string>('');
+  const [pinError, setPinError] = useState<string>('');
+
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('lumina_dashboard_auth') : null;
+    if (saved === 'true') {
+      setIsAuthenticated(true);
+    }
+    setIsAuthChecking(false);
+  }, []);
+
+  const handlePinSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (enteredPin.trim() === ADMIN_PIN) {
+      setIsAuthenticated(true);
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('lumina_dashboard_auth', 'true');
+      }
+      setPinError('');
+    } else {
+      setPinError('PIN de seguridad clínico incorrecto. Intente nuevamente.');
+      setEnteredPin('');
+    }
+  };
+
+  const handleLogout = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('lumina_dashboard_auth');
+    }
+    setIsAuthenticated(false);
+    setEnteredPin('');
+  };
+
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [backendOnline, setBackendOnline] = useState<boolean>(false);
@@ -296,6 +334,78 @@ export default function Dashboard() {
     setSimMessage(prompt);
   };
 
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-slate-900/90 border border-teal-500/20 backdrop-blur-xl rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/10 rounded-full blur-2xl pointer-events-none" />
+          
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400 shadow-inner">
+              <ShieldCheck className="w-8 h-8" />
+            </div>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Lumina Dental Studio</h1>
+            <p className="text-xs uppercase tracking-widest text-teal-400 font-semibold mt-1">Panel de Control Clínico</p>
+            <p className="text-sm text-slate-400 mt-3">
+              Acceso restringido para el equipo médico y coordinadores. Ingrese el PIN de seguridad para continuar.
+            </p>
+          </div>
+
+          <form onSubmit={handlePinSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1.5 text-center">
+                PIN DE ADMINISTRACIÓN
+              </label>
+              <input
+                type="password"
+                maxLength={8}
+                autoFocus
+                value={enteredPin}
+                onChange={(e) => {
+                  setEnteredPin(e.target.value);
+                  setPinError('');
+                }}
+                placeholder="••••"
+                className="w-full text-center tracking-[0.5em] text-2xl font-mono px-4 py-3 rounded-xl bg-slate-800/80 border border-slate-700 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition"
+              />
+            </div>
+
+            {pinError && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs text-center flex items-center justify-center gap-1.5">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {pinError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-teal-500/20 transition transform active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Lock className="w-4 h-4" /> Desbloquear Panel
+            </button>
+          </form>
+
+          <div className="mt-8 pt-6 border-t border-slate-800 text-center">
+            <a
+              href="/"
+              className="text-xs text-slate-400 hover:text-teal-400 transition inline-flex items-center gap-1.5"
+            >
+              ← Volver al sitio público de pacientes
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
       {/* Header */}
@@ -345,6 +455,14 @@ export default function Dashboard() {
               title="Refrescar métricas y estado"
             >
               <RefreshCw className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+              title="Bloquear panel clínico (Cerrar sesión)"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>

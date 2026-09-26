@@ -254,8 +254,9 @@ def test_omnichannel_pipeline_end_to_end_with_rag(isolated_memory):
 def test_neon_pgvector_database_integration():
     """Verifies that live Neon PostgreSQL supports pgvector and tables when DATABASE_URL is present."""
     from app.config import settings
-    if not settings.database_url:
-        pytest.skip("DATABASE_URL not configured")
+    from app.core.database import psycopg
+    if not settings.database_url or psycopg is None:
+        pytest.skip("DATABASE_URL or psycopg driver not available in environment")
     live_db = DatabaseManager(in_memory_only=False)
     ok = live_db.init_db()
     assert ok is True

@@ -1,7 +1,8 @@
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, HTTPException, Request, Query, Depends, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Request, Query, Depends, BackgroundTasks, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -12,7 +13,7 @@ from app.core.database import db_manager
 from app.core.cleanup import cleanup_manager, run_runtime_cleanup
 from app.models.dental_models import AppointmentRecord, AppointmentCreateRequest, SlotsResponse
 from app.social_gateways.meta import router as meta_router
-from app.social_gateways.youtube import router as youtube_router
+from app.social_gateways.youtube import router as youtube_router, sync_youtube_comments_task
 
 
 @asynccontextmanager
@@ -82,7 +83,9 @@ async def runtime_cleanup_middleware(request: Request, call_next):
     return response
 
 @app.get("/")
-def health_check():
+def health_check(background_tasks: BackgroundTasks):
+    # Trigger opportunistic YouTube comments sync in the background (enforces 10-min cooldown internally)
+    background_tasks.add_task(sync_youtube_comments_task)
     return {
         "status": "healthy",
         "clinic": settings.clinic_name,
@@ -209,7 +212,10 @@ def dashboard_summary():
 
 
 @app.post("/api/admin/cleanup")
-def trigger_admin_cleanup():
+def trigger_admin_cleanup(x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")):
     """Manual cleanup trigger to prune in-memory caches, purge temp files, and run gc.collect()."""
+    expected_key = os.getenv("ADMIN_API_KEY") or os.getenv("NEXT_PUBLIC_ADMIN_PIN") or "lumina_admin_2026"
+    if x_admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Forbidden: Clave de administrador inválida.")
     return cleanup_manager.perform_cleanup(force=True)
 
