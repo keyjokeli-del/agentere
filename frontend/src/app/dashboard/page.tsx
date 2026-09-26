@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -22,7 +23,15 @@ import {
   LogOut,
   Power,
   CalendarCheck,
-  Lock
+  Lock,
+  Film,
+  Play,
+  Share2,
+  Layers,
+  Cpu,
+  BrainCircuit,
+  Eye,
+  Activity as ActivityIcon
 } from 'lucide-react';
 import {
   ChannelType,
@@ -60,13 +69,46 @@ const QUICK_PROMPTS = [
   'Confirmo el turno para limpieza a las 09:45'
 ];
 
+const CLINICAL_ASSETS = [
+  {
+    name: 'Logotipo 3D Oficial',
+    filename: 'lumina-logo.png',
+    type: 'Emblema 3D (1:1)',
+    desc: 'Porcelana translúcida, anillo cian #00E5FF y zafiro.',
+  },
+  {
+    name: 'Portada y Atmósfera Clínica',
+    filename: 'lumina-cover.png',
+    type: 'Widescreen (16:9)',
+    desc: 'Gabinete odontológico de vanguardia con escáner digital 3D.',
+  },
+  {
+    name: 'Post Blanqueamiento Láser',
+    filename: 'ig-post-blanqueamiento.png',
+    type: 'Social Post (1:1)',
+    desc: 'Estética dental avanzada, fotoactivación en frío.',
+  },
+  {
+    name: 'Post Implantes Guiados 3D',
+    filename: 'ig-post-implantes.png',
+    type: 'Social Post (1:1)',
+    desc: 'Cirugía computarizada y fijación ósea milimétrica.',
+  },
+  {
+    name: 'Post Guardia & Triage 24/7',
+    filename: 'ig-post-urgencias.png',
+    type: 'Social Post (1:1)',
+    desc: 'Atención prioritaria inmediata sin esperas.',
+  }
+];
+
 export default function Dashboard() {
-  // Security PIN Access Gate (Restricts /dashboard to clinic staff)
   const ADMIN_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN || '2026';
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [enteredPin, setEnteredPin] = useState<string>('');
   const [pinError, setPinError] = useState<string>('');
+  const [activeDashboardTab, setActiveDashboardTab] = useState<'monitor' | 'pipeline' | 'media'>('monitor');
 
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? sessionStorage.getItem('lumina_dashboard_auth') : null;
@@ -134,9 +176,9 @@ export default function Dashboard() {
     {
       id: 'init-1',
       sender: 'Sistema Multicanal',
-      text: '👋 ¡Bienvenido al Simulador Omnicanal! Los agentes de IA (Triage, FAQ y Citas con Groq Llama 3.3) están listos para responder y gestionar reservas en tiempo real.',
+      text: '👋 ¡Bienvenido al Simulador Omnicanal de Lumina Dental Studio! La arquitectura modular de 3 agentes (ReaderAgent -> AnalyzerAgent -> SolverAgent) está activa y conectada a Neon Postgres y Google Calendar.',
       isBot: true,
-      agent: 'Dental AI Coordinator',
+      agent: 'Lumina Coordinator',
       intent: 'GREETING',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
@@ -212,7 +254,6 @@ export default function Dashboard() {
     }
   }, [WA_SERVICE_URL]);
 
-  // Periodic Polling
   useEffect(() => {
     fetchBackendData();
     fetchWhatsAppStatus();
@@ -226,7 +267,6 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [fetchBackendData, fetchWhatsAppStatus, fetchSlots, selectedDate]);
 
-  // Handle WhatsApp Connect
   const handleConnectWhatsApp = async () => {
     setIsConnectingWA(true);
     try {
@@ -240,7 +280,6 @@ export default function Dashboard() {
     }
   };
 
-  // Handle WhatsApp Disconnect
   const handleDisconnectWhatsApp = async () => {
     if (!confirm('¿Deseas desvincular y cerrar la sesión de WhatsApp de la clínica?')) return;
     setIsDisconnectingWA(true);
@@ -256,7 +295,6 @@ export default function Dashboard() {
     }
   };
 
-  // Handle Message Submission in Simulator
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!simMessage.trim() || simLoading) return;
@@ -320,7 +358,7 @@ export default function Dashboard() {
         {
           id: `err-${Date.now()}`,
           sender: 'Sistema',
-          text: '⚠️ Backend desconectado. Verifica que FastAPI esté corriendo en http://localhost:8000.',
+          text: '⚠️ Backend desconectado. Verifica que FastAPI esté corriendo en producción.',
           isBot: true,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
@@ -336,33 +374,45 @@ export default function Dashboard() {
 
   if (isAuthChecking) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-abyssal flex items-center justify-center">
+        <div className="w-10 h-10 border-2 border-cyan-bright border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
+  // FUTURISTIC VAULT PIN GATE
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-slate-900/90 border border-teal-500/20 backdrop-blur-xl rounded-3xl p-8 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/10 rounded-full blur-2xl pointer-events-none" />
+      <div className="min-h-screen bg-abyssal flex items-center justify-center p-4 relative overflow-hidden">
+        {/* Ambient Glows */}
+        <div className="absolute w-[500px] h-[500px] bg-sapphire-900/40 rounded-full blur-[140px] pointer-events-none" />
+        <div className="absolute w-[350px] h-[350px] bg-cyan-bright/15 rounded-full blur-[100px] pointer-events-none" />
+
+        <div className="max-w-md w-full glass-panel border border-cyan-bright/30 rounded-3xl p-8 shadow-2xl relative overflow-hidden backdrop-blur-2xl bg-sapphire-950/90">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-bright/10 rounded-full blur-2xl pointer-events-none" />
           
           <div className="text-center mb-8">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400 shadow-inner">
-              <ShieldCheck className="w-8 h-8" />
+            <div className="relative w-20 h-20 mx-auto mb-4 rounded-2xl overflow-hidden border border-cyan-bright/40 shadow-cyan-glow bg-abyssal p-2">
+              <Image
+                src="/social-kit/lumina-logo.png"
+                alt="Lumina Dental Studio Logo"
+                fill
+                sizes="80px"
+                className="object-contain p-2"
+                priority
+              />
             </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Lumina Dental Studio</h1>
-            <p className="text-xs uppercase tracking-widest text-teal-400 font-semibold mt-1">Panel de Control Clínico</p>
-            <p className="text-sm text-slate-400 mt-3">
-              Acceso restringido para el equipo médico y coordinadores. Ingrese el PIN de seguridad para continuar.
+            <h1 className="text-2xl font-extrabold text-white tracking-tight">Lumina Dental Studio</h1>
+            <p className="text-xs uppercase tracking-widest text-cyan-bright font-bold mt-1">Bóveda de Control Clínico</p>
+            <p className="text-xs text-titanium-400 mt-2">
+              Acceso restringido para el equipo médico y coordinadores. Ingrese el PIN de seguridad (2026).
             </p>
           </div>
 
           <form onSubmit={handlePinSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5 text-center">
-                PIN DE ADMINISTRACIÓN
+              <label className="block text-xs font-bold text-titanium-300 mb-1.5 text-center">
+                PIN DE SEGURIDAD
               </label>
               <input
                 type="password"
@@ -374,12 +424,12 @@ export default function Dashboard() {
                   setPinError('');
                 }}
                 placeholder="••••"
-                className="w-full text-center tracking-[0.5em] text-2xl font-mono px-4 py-3 rounded-xl bg-slate-800/80 border border-slate-700 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition"
+                className="w-full text-center tracking-[0.5em] text-2xl font-mono px-4 py-3 rounded-xl bg-sapphire-900/60 border border-cyan-bright/30 text-white placeholder-titanium-400 focus:outline-none focus:ring-2 focus:ring-cyan-bright transition"
               />
             </div>
 
             {pinError && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs text-center flex items-center justify-center gap-1.5">
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs text-center flex items-center justify-center gap-1.5">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 {pinError}
               </div>
@@ -387,16 +437,16 @@ export default function Dashboard() {
 
             <button
               type="submit"
-              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-teal-500/20 transition transform active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3 px-4 rounded-xl bg-cyan-bright hover:bg-cyan-bright/90 text-abyssal font-bold text-sm shadow-cyan-glow transition transform active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
             >
-              <Lock className="w-4 h-4" /> Desbloquear Panel
+              <Lock className="w-4 h-4" /> Desbloquear Panel Clínico
             </button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-slate-800 text-center">
+          <div className="mt-8 pt-6 border-t border-white/10 text-center">
             <a
               href="/"
-              className="text-xs text-slate-400 hover:text-teal-400 transition inline-flex items-center gap-1.5"
+              className="text-xs text-titanium-400 hover:text-cyan-bright transition inline-flex items-center gap-1.5"
             >
               ← Volver al sitio público de pacientes
             </a>
@@ -407,40 +457,46 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+    <div className="min-h-screen bg-abyssal text-diamond pb-16 selection:bg-cyan-bright selection:text-abyssal">
+      {/* Top Header */}
+      <header className="glass-panel border-b border-cyan-bright/20 sticky top-0 z-30 backdrop-blur-xl bg-sapphire-950/85">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-sm ring-2 ring-teal-100">
-              <Stethoscope className="w-6 h-6" />
+            <div className="relative w-10 h-10 rounded-xl overflow-hidden border border-cyan-bright/40 shadow-cyan-glow bg-abyssal">
+              <Image
+                src="/social-kit/lumina-logo.png"
+                alt="Lumina Logo"
+                fill
+                sizes="40px"
+                className="object-cover"
+              />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="font-bold text-lg text-slate-900 leading-none">Clínica Dental Sonrisas</h1>
-                <span className="bg-teal-50 text-teal-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-teal-200 uppercase tracking-wide">
-                  Panel Omnicanal
+                <h1 className="font-extrabold text-base text-white tracking-tight">Lumina Dental Studio</h1>
+                <span className="bg-cyan-bright/10 text-cyan-bright text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-cyan-bright/30 uppercase tracking-wide">
+                  Panel Clínico IA
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">Atención 24/7 con IA • $0 USD Costo Operativo</p>
+              <p className="text-[11px] text-titanium-400 font-medium">Odontología de Precisión • $0 USD Costo de APIs</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Status Badges */}
+            {/* Live Telemetry Badges */}
             <div className="hidden md:flex items-center gap-2">
               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
-                backendOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'
+                backendOnline ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/30' : 'bg-rose-950/60 text-rose-300 border-rose-500/30'
               }`}>
-                <span className={`w-2 h-2 rounded-full ${backendOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-                {backendOnline ? 'FastAPI Backend Online' : 'Backend Offline'}
+                <span className={`w-2 h-2 rounded-full ${backendOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+                {backendOnline ? 'FastAPI Render Online' : 'Backend Offline'}
               </span>
 
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                <Sparkles className="w-3.5 h-3.5" /> Groq Llama 3.3 (Capa Gratis)
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-sapphire-900/60 text-cyan-bright border border-cyan-bright/30">
+                <Sparkles className="w-3.5 h-3.5" /> Groq Llama 3.3
               </span>
 
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-sapphire-900/60 text-teal-300 border border-teal-500/30">
                 <CalendarIcon className="w-3.5 h-3.5" /> {calendarOnline}
               </span>
             </div>
@@ -451,7 +507,7 @@ export default function Dashboard() {
                 fetchWhatsAppStatus();
                 fetchSlots(selectedDate);
               }}
-              className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition"
+              className="p-2 text-titanium-300 hover:text-white hover:bg-white/10 rounded-xl transition cursor-pointer"
               title="Refrescar métricas y estado"
             >
               <RefreshCw className="w-4 h-4" />
@@ -459,7 +515,7 @@ export default function Dashboard() {
 
             <button
               onClick={handleLogout}
-              className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+              className="p-2 text-rose-400 hover:bg-rose-950/50 rounded-xl transition cursor-pointer border border-rose-500/30"
               title="Bloquear panel clínico (Cerrar sesión)"
             >
               <LogOut className="w-4 h-4" />
@@ -468,490 +524,678 @@ export default function Dashboard() {
         </div>
       </header>
 
+      {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-8">
-        {/* Section 1: Real-Time Channels Monitor */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-teal-600" />
-                Monitor de Canales en Tiempo Real
-              </h2>
-              <p className="text-xs text-slate-500">Conectores sin costo mensual integrados a los agentes de atención y agenda</p>
-            </div>
-            <span className="text-xs font-semibold text-slate-500 bg-white px-3 py-1 rounded-lg border border-slate-200">
-              4 Redes Omnicanal
-            </span>
-          </div>
+        
+        {/* Navigation Tabs Bar */}
+        <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+          <button
+            onClick={() => setActiveDashboardTab('monitor')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeDashboardTab === 'monitor'
+                ? 'bg-cyan-bright text-abyssal shadow-cyan-glow'
+                : 'bg-white/5 text-titanium-300 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            <ActivityIcon className="w-4 h-4" />
+            <span>Monitor Omnicanal & Agenda</span>
+          </button>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* WhatsApp (Baileys + Neon) */}
-            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:shadow-md transition flex flex-col justify-between relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -mr-8 -mt-8 pointer-events-none" />
-              <div>
-                <div className="flex items-center justify-between mb-3 relative">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-xs">
-                    <Smartphone className="w-5 h-5" />
+          <button
+            onClick={() => setActiveDashboardTab('pipeline')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeDashboardTab === 'pipeline'
+                ? 'bg-cyan-bright text-abyssal shadow-cyan-glow'
+                : 'bg-white/5 text-titanium-300 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            <BrainCircuit className="w-4 h-4" />
+            <span>Arquitectura 3 Agentes</span>
+          </button>
+
+          <button
+            onClick={() => setActiveDashboardTab('media')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeDashboardTab === 'media'
+                ? 'bg-cyan-bright text-abyssal shadow-cyan-glow'
+                : 'bg-white/5 text-titanium-300 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            <Film className="w-4 h-4" />
+            <span>Galería de Medios & Video Reel</span>
+          </button>
+        </div>
+
+        {/* TAB 1: REAL-TIME CHANNELS & SIMULATOR */}
+        {activeDashboardTab === 'monitor' && (
+          <div className="space-y-8">
+            {/* Real-time channels row */}
+            <section>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-cyan-bright" />
+                    Monitor de Canales en Tiempo Real
+                  </h2>
+                  <p className="text-xs text-titanium-400">Conectores sin costo mensual integrados a los agentes de atención y agenda</p>
+                </div>
+                <span className="text-xs font-mono font-bold text-cyan-bright bg-cyan-bright/10 px-3 py-1 rounded-xl border border-cyan-bright/30">
+                  4 Redes Activas
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* WhatsApp */}
+                <div className="glass-card rounded-2xl p-5 border border-cyan-bright/20 shadow-xl flex flex-col justify-between relative overflow-hidden">
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-950/80 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+                        <Smartphone className="w-5 h-5" />
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${
+                        waData.status === 'connected' ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30' :
+                        waData.status === 'waiting_for_scan' ? 'bg-amber-950 text-amber-300 border border-amber-500/30' : 'bg-slate-900 text-slate-400 border border-slate-700'
+                      }`}>
+                        <span className={`w-2 h-2 rounded-full ${
+                          waData.status === 'connected' ? 'bg-emerald-400 animate-pulse' :
+                          waData.status === 'waiting_for_scan' ? 'bg-amber-400 animate-bounce' : 'bg-slate-500'
+                        }`} />
+                        {waData.status === 'connected' ? 'Conectado' : waData.status === 'waiting_for_scan' ? 'Esperando QR' : 'Desconectado'}
+                      </span>
+                    </div>
+
+                    <h3 className="font-bold text-white text-sm">WhatsApp (Baileys Bridge)</h3>
+                    <p className="text-xs text-titanium-400 mt-1">Conexión WebSocket directa sin pago de API oficial ni intermediarios.</p>
+
+                    <div className="mt-3 pt-3 border-t border-white/10">
+                      <div className="flex items-center gap-1.5">
+                        <Database className="w-3.5 h-3.5 text-cyan-bright" />
+                        <span className="text-[11px] font-bold text-titanium-300">Persistencia:</span>
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-purple-950/80 text-purple-300 border border-purple-500/30">
+                          {waData.neonConfigured ? '⚡ Neon Postgres' : '💾 Disco Contingencia'}
+                        </span>
+                      </div>
+                      {waData.user && (
+                        <p className="text-[11px] font-mono text-emerald-400 mt-1 truncate">
+                          Línea: {waData.user}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${
-                    waData.status === 'connected' ? 'bg-emerald-100 text-emerald-800' :
-                    waData.status === 'waiting_for_scan' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'
-                  }`}>
-                    <span className={`w-2 h-2 rounded-full ${
-                      waData.status === 'connected' ? 'bg-emerald-500 animate-pulse' :
-                      waData.status === 'waiting_for_scan' ? 'bg-amber-500 animate-bounce' : 'bg-slate-400'
-                    }`} />
-                    {waData.status === 'connected' ? 'Conectado' : waData.status === 'waiting_for_scan' ? 'Esperando QR' : 'Desconectado'}
-                  </span>
+
+                  <div className="mt-4 pt-3 border-t border-white/10 flex items-center gap-2">
+                    <button
+                      onClick={() => setShowQrModal(true)}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-abyssal rounded-xl transition shadow-xs cursor-pointer"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      {waData.status === 'connected' ? 'Ver Conexión' : 'Escanear QR'}
+                    </button>
+                    {waData.status === 'connected' && (
+                      <button
+                        onClick={handleDisconnectWhatsApp}
+                        disabled={isDisconnectingWA}
+                        className="p-2 text-rose-400 hover:bg-rose-950/50 rounded-xl transition border border-rose-500/30 cursor-pointer"
+                        title="Cerrar sesión de WhatsApp"
+                      >
+                        <LogOut className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <h3 className="font-bold text-slate-900 text-sm">WhatsApp (Baileys Bridge)</h3>
-                <p className="text-xs text-slate-500 mt-1">Conexión WebSocket directa sin pago de API oficial ni intermediarios.</p>
-
-                {/* Neon Postgres Status */}
-                <div className="mt-3 pt-3 border-t border-slate-100">
-                  <div className="flex items-center gap-1.5">
-                    <Database className="w-3.5 h-3.5 text-purple-600" />
-                    <span className="text-[11px] font-bold text-slate-700">Persistencia:</span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                      waData.neonConfigured
-                        ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                        : 'bg-amber-50 text-amber-800 border border-amber-200'
-                    }`}>
-                      {waData.neonConfigured ? '⚡ Neon Postgres (Cero desconexión)' : '💾 Disco Local Contingencia'}
-                    </span>
+                {/* Facebook Messenger */}
+                <div className="glass-card rounded-2xl p-5 border border-cyan-bright/20 shadow-xl flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-950/80 text-blue-400 flex items-center justify-center border border-blue-500/30">
+                        <FacebookIcon className="w-5 h-5" />
+                      </div>
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-950 text-blue-300 border border-blue-500/30 inline-flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" /> Webhook Activo
+                      </span>
+                    </div>
+                    <h3 className="font-bold text-white text-sm">Facebook Messenger</h3>
+                    <p className="text-xs text-titanium-400 mt-1">Recepción y respuesta de consultas privadas en la Fan Page.</p>
                   </div>
-                  {waData.user && (
-                    <p className="text-[11px] font-mono text-emerald-700 mt-1 truncate">
-                      Línea: {waData.user}
-                    </p>
+                  <div className="mt-4 pt-3 border-t border-white/10 text-xs text-titanium-300 flex items-center gap-1.5 font-medium">
+                    <CheckCircle2 className="w-4 h-4 text-cyan-bright" /> Meta Developer Live Mode
+                  </div>
+                </div>
+
+                {/* Instagram Direct */}
+                <div className="glass-card rounded-2xl p-5 border border-cyan-bright/20 shadow-xl flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="w-10 h-10 rounded-xl bg-pink-950/80 text-pink-400 flex items-center justify-center border border-pink-500/30">
+                        <InstagramIcon className="w-5 h-5" />
+                      </div>
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-pink-950 text-pink-300 border border-pink-500/30 inline-flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-pink-400 animate-pulse" /> DMs & Reels
+                      </span>
+                    </div>
+                    <h3 className="font-bold text-white text-sm">Instagram Direct</h3>
+                    <p className="text-xs text-titanium-400 mt-1">Respuestas a preguntas en publicaciones, reels y mensajes directos.</p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-white/10 text-xs text-titanium-300 flex items-center gap-1.5 font-medium">
+                    <CheckCircle2 className="w-4 h-4 text-cyan-bright" /> Graph API Free Tier
+                  </div>
+                </div>
+
+                {/* YouTube Comments */}
+                <div className="glass-card rounded-2xl p-5 border border-cyan-bright/20 shadow-xl flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="w-10 h-10 rounded-xl bg-red-950/80 text-red-400 flex items-center justify-center border border-red-500/30">
+                        <YoutubeIcon className="w-5 h-5" />
+                      </div>
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-red-950 text-red-300 border border-red-500/30 inline-flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" /> Comentarios
+                      </span>
+                    </div>
+                    <h3 className="font-bold text-white text-sm">Canal de YouTube</h3>
+                    <p className="text-xs text-titanium-400 mt-1">Sondeo cada 10 min de consultas en videos y guía a agendar.</p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-white/10 text-xs text-titanium-300 flex items-center gap-1.5 font-medium">
+                    <CheckCircle2 className="w-4 h-4 text-cyan-bright" /> Google Cloud Free Quota
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Simulator Console & Google Calendar Agenda */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              
+              {/* Simulator */}
+              <section className="lg:col-span-7 glass-panel rounded-3xl border border-cyan-bright/25 shadow-2xl overflow-hidden flex flex-col bg-sapphire-950/90">
+                <div className="p-4 sm:p-5 border-b border-white/10 flex flex-wrap items-center justify-between gap-3 bg-sapphire-900/40">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-cyan-bright/20 text-cyan-bright flex items-center justify-center border border-cyan-bright/30">
+                      <MessageSquare className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h2 className="font-bold text-sm text-white leading-tight">Simulador de Chat Omnicanal</h2>
+                      <p className="text-[11px] text-titanium-400">Prueba en vivo la respuesta de los 3 agentes y la agenda médica</p>
+                    </div>
+                  </div>
+
+                  {/* Channel Selector */}
+                  <div className="flex items-center gap-1 bg-abyssal p-1 rounded-xl border border-white/10 text-xs font-semibold">
+                    <button
+                      onClick={() => setSimChannel('whatsapp')}
+                      className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition cursor-pointer ${
+                        simChannel === 'whatsapp' ? 'bg-emerald-500 text-abyssal font-bold' : 'text-titanium-300 hover:text-white'
+                      }`}
+                    >
+                      <Smartphone className="w-3.5 h-3.5" /> WA
+                    </button>
+                    <button
+                      onClick={() => setSimChannel('facebook')}
+                      className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition cursor-pointer ${
+                        simChannel === 'facebook' ? 'bg-blue-600 text-white font-bold' : 'text-titanium-300 hover:text-white'
+                      }`}
+                    >
+                      <FacebookIcon className="w-3.5 h-3.5" /> FB
+                    </button>
+                    <button
+                      onClick={() => setSimChannel('instagram')}
+                      className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition cursor-pointer ${
+                        simChannel === 'instagram' ? 'bg-pink-600 text-white font-bold' : 'text-titanium-300 hover:text-white'
+                      }`}
+                    >
+                      <InstagramIcon className="w-3.5 h-3.5" /> IG
+                    </button>
+                    <button
+                      onClick={() => setSimChannel('youtube')}
+                      className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition cursor-pointer ${
+                        simChannel === 'youtube' ? 'bg-red-600 text-white font-bold' : 'text-titanium-300 hover:text-white'
+                      }`}
+                    >
+                      <YoutubeIcon className="w-3.5 h-3.5" /> YT
+                    </button>
+                  </div>
+                </div>
+
+                {/* Patient Name & Quick Chips */}
+                <div className="p-3 bg-abyssal/60 border-b border-white/10 flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-titanium-400 uppercase tracking-wide">Paciente:</span>
+                    <input
+                      type="text"
+                      value={simSender}
+                      onChange={e => setSimSender(e.target.value)}
+                      className="bg-sapphire-900/60 border border-white/20 rounded-lg px-2.5 py-1 text-xs font-semibold text-white focus:outline-none focus:ring-1 focus:ring-cyan-bright"
+                      placeholder="Nombre del paciente"
+                    />
+                    <span className="text-[11px] text-titanium-400">Canal: <strong className="uppercase text-cyan-bright">{simChannel}</strong></span>
+                  </div>
+
+                  {/* Quick Prompts */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    <span className="text-[10px] font-bold text-titanium-400 whitespace-nowrap">Ejemplos:</span>
+                    {QUICK_PROMPTS.map((p, i) => (
+                      <button
+                        key={i}
+                        onClick={() => selectQuickPrompt(p)}
+                        className="text-[10px] font-medium bg-white/5 hover:bg-cyan-bright/20 hover:text-cyan-bright text-titanium-300 border border-white/10 px-2.5 py-1 rounded-full whitespace-nowrap transition cursor-pointer"
+                      >
+                        {p.length > 35 ? p.substring(0, 35) + '...' : p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Chat Messages Body */}
+                <div className="p-4 sm:p-5 flex-1 overflow-y-auto space-y-4 max-h-[460px] min-h-[380px] bg-abyssal/40">
+                  {chatLog.map(msg => (
+                    <div key={msg.id} className={`flex flex-col ${msg.isBot ? 'items-start' : 'items-end'}`}>
+                      <div className="flex items-center gap-1.5 mb-1 px-1 text-xs text-titanium-400 font-medium">
+                        <span>{msg.sender}</span>
+                        <span className="text-[10px] text-titanium-500">{msg.timestamp}</span>
+                        {msg.agent && (
+                          <span className="px-2 py-0.5 rounded-full bg-cyan-bright/10 text-cyan-bright border border-cyan-bright/30 text-[10px] font-mono font-bold">
+                            {msg.agent}
+                          </span>
+                        )}
+                        {msg.intent && (
+                          <span className="px-2 py-0.5 rounded-full bg-purple-950/80 text-purple-300 border border-purple-500/30 text-[10px] font-mono font-bold">
+                            {msg.intent}
+                          </span>
+                        )}
+                      </div>
+                      <div className={`p-4 rounded-2xl max-w-[88%] text-sm leading-relaxed whitespace-pre-line shadow-xl ${
+                        msg.isBot
+                          ? 'bg-sapphire-900/70 border border-white/15 text-white'
+                          : 'bg-cyan-bright text-abyssal font-semibold shadow-cyan-glow'
+                      }`}>
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))}
+                  {simLoading && (
+                    <div className="flex items-center gap-2 text-xs text-cyan-bright italic p-3 bg-sapphire-900/60 rounded-2xl border border-cyan-bright/30 inline-flex shadow-xl animate-pulse">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Groq Llama 3.3 está analizando el caso y verificando Google Calendar...
+                    </div>
                   )}
                 </div>
-              </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2">
-                <button
-                  onClick={() => setShowQrModal(true)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition shadow-xs"
-                >
-                  <QrCode className="w-3.5 h-3.5" />
-                  {waData.status === 'connected' ? 'Ver Conexión' : 'Escanear QR'}
-                </button>
-                {waData.status === 'connected' && (
+                {/* Message Input Form */}
+                <form onSubmit={handleSendMessage} className="p-3 sm:p-4 bg-sapphire-950 border-t border-white/10 flex gap-2">
+                  <input
+                    type="text"
+                    value={simMessage}
+                    onChange={e => setSimMessage(e.target.value)}
+                    placeholder={`Escribe como paciente en ${simChannel.toUpperCase()}...`}
+                    className="flex-1 bg-sapphire-900/50 border border-white/15 rounded-xl px-4 py-2.5 text-sm text-white placeholder-titanium-400 focus:outline-none focus:ring-2 focus:ring-cyan-bright transition"
+                  />
                   <button
-                    onClick={handleDisconnectWhatsApp}
-                    disabled={isDisconnectingWA}
-                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition border border-rose-200"
-                    title="Cerrar sesión de WhatsApp"
+                    type="submit"
+                    disabled={simLoading || !simMessage.trim()}
+                    className="bg-cyan-bright hover:bg-cyan-bright/90 disabled:opacity-50 text-abyssal px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition shadow-cyan-glow cursor-pointer"
                   >
-                    <LogOut className="w-4 h-4" />
+                    <Send className="w-4 h-4" />
+                    Enviar
                   </button>
-                )}
-              </div>
-            </div>
+                </form>
+              </section>
 
-            {/* Facebook Messenger */}
-            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:shadow-md transition flex flex-col justify-between relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-full -mr-8 -mt-8 pointer-events-none" />
-              <div>
-                <div className="flex items-center justify-between mb-3 relative">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-xs">
-                    <FacebookIcon className="w-5 h-5" />
+              {/* Google Calendar Agenda */}
+              <section className="lg:col-span-5 glass-panel rounded-3xl border border-cyan-bright/25 shadow-2xl overflow-hidden flex flex-col bg-sapphire-950/90">
+                <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-sapphire-900/40">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-teal-500/20 text-teal-300 flex items-center justify-center border border-teal-500/30">
+                      <CalendarIcon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h2 className="font-bold text-sm text-white leading-tight">Agenda en Google Calendar</h2>
+                      <p className="text-[11px] text-titanium-400">Franjas de 45 min con bloqueo anti-colisión</p>
+                    </div>
                   </div>
-                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 inline-flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" /> Webhook Activo
+                  <span className="text-xs font-mono font-bold px-2.5 py-1 bg-cyan-bright/10 text-cyan-bright rounded-full border border-cyan-bright/30">
+                    {appointments.length} turnos
                   </span>
                 </div>
-                <h3 className="font-bold text-slate-900 text-sm">Facebook Messenger</h3>
-                <p className="text-xs text-slate-500 mt-1">Recepción de mensajes privados de la Fan Page de la clínica.</p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-500 flex items-center gap-1.5 font-medium">
-                <CheckCircle2 className="w-4 h-4 text-blue-600" /> Meta Developer Free Tier
-              </div>
-            </div>
 
-            {/* Instagram Direct */}
-            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:shadow-md transition flex flex-col justify-between relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-pink-50 rounded-full -mr-8 -mt-8 pointer-events-none" />
-              <div>
-                <div className="flex items-center justify-between mb-3 relative">
-                  <div className="w-10 h-10 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center shadow-xs">
-                    <InstagramIcon className="w-5 h-5" />
+                {/* Date Selector & Available 45-min slots */}
+                <div className="p-4 bg-abyssal/60 border-b border-white/10 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-bold text-titanium-300 flex items-center gap-1.5">
+                      <CalendarCheck className="w-4 h-4 text-cyan-bright" /> Consultar Día:
+                    </label>
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={e => {
+                        setSelectedDate(e.target.value);
+                        fetchSlots(e.target.value);
+                      }}
+                      className="text-xs font-semibold bg-sapphire-900/60 border border-white/20 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:ring-1 focus:ring-cyan-bright"
+                    />
                   </div>
-                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-pink-100 text-pink-800 inline-flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-pink-500 animate-pulse" /> DMs & Reels
-                  </span>
-                </div>
-                <h3 className="font-bold text-slate-900 text-sm">Instagram Direct</h3>
-                <p className="text-xs text-slate-500 mt-1">Respuestas a preguntas en publicaciones, reels y mensajes directos.</p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-500 flex items-center gap-1.5 font-medium">
-                <CheckCircle2 className="w-4 h-4 text-pink-600" /> Graph API Free Tier
-              </div>
-            </div>
 
-            {/* YouTube Comments */}
-            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:shadow-md transition flex flex-col justify-between relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-red-50 rounded-full -mr-8 -mt-8 pointer-events-none" />
-              <div>
-                <div className="flex items-center justify-between mb-3 relative">
-                  <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shadow-xs">
-                    <YoutubeIcon className="w-5 h-5" />
-                  </div>
-                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 inline-flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> Comentarios
-                  </span>
-                </div>
-                <h3 className="font-bold text-slate-900 text-sm">YouTube Channel</h3>
-                <p className="text-xs text-slate-500 mt-1">Interpreta consultas odontológicas en videos educativos y guía a agendar.</p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-500 flex items-center gap-1.5 font-medium">
-                <CheckCircle2 className="w-4 h-4 text-red-600" /> Google Cloud Free Quota
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Section 2: Interactive Simulator & Google Calendar Agenda */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          {/* Simulator Console */}
-          <section className="lg:col-span-7 bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center">
-                  <MessageSquare className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="font-bold text-sm text-slate-900 leading-tight">Simulador de Chat Omnicanal</h2>
-                  <p className="text-[11px] text-slate-500">Prueba cómo responden los agentes al simular mensajes de pacientes</p>
-                </div>
-              </div>
-
-              {/* Channel Selector */}
-              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 text-xs font-semibold shadow-xs">
-                <button
-                  onClick={() => setSimChannel('whatsapp')}
-                  className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition ${
-                    simChannel === 'whatsapp' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Smartphone className="w-3.5 h-3.5" /> WA
-                </button>
-                <button
-                  onClick={() => setSimChannel('facebook')}
-                  className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition ${
-                    simChannel === 'facebook' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <FacebookIcon className="w-3.5 h-3.5" /> FB
-                </button>
-                <button
-                  onClick={() => setSimChannel('instagram')}
-                  className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition ${
-                    simChannel === 'instagram' ? 'bg-pink-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <InstagramIcon className="w-3.5 h-3.5" /> IG
-                </button>
-                <button
-                  onClick={() => setSimChannel('youtube')}
-                  className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition ${
-                    simChannel === 'youtube' ? 'bg-red-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <YoutubeIcon className="w-3.5 h-3.5" /> YT
-                </button>
-              </div>
-            </div>
-
-            {/* Patient Name & Quick Chips */}
-            <div className="p-3 bg-slate-100/60 border-b border-slate-200/70 flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Paciente:</span>
-                <input
-                  type="text"
-                  value={simSender}
-                  onChange={e => setSimSender(e.target.value)}
-                  className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                  placeholder="Nombre del paciente"
-                />
-                <span className="text-[11px] text-slate-400">Canal: <strong className="uppercase text-slate-600">{simChannel}</strong></span>
-              </div>
-
-              {/* Quick Prompts */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">Ejemplos:</span>
-                {QUICK_PROMPTS.map((p, i) => (
-                  <button
-                    key={i}
-                    onClick={() => selectQuickPrompt(p)}
-                    className="text-[10px] font-medium bg-white hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300 text-slate-600 border border-slate-200 px-2.5 py-1 rounded-full whitespace-nowrap transition"
-                  >
-                    {p.length > 35 ? p.substring(0, 35) + '...' : p}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Chat Messages Body */}
-            <div className="p-4 sm:p-5 flex-1 overflow-y-auto space-y-4 max-h-[460px] min-h-[380px] bg-slate-50/40">
-              {chatLog.map(msg => (
-                <div key={msg.id} className={`flex flex-col ${msg.isBot ? 'items-start' : 'items-end'}`}>
-                  <div className="flex items-center gap-1.5 mb-1 px-1 text-xs text-slate-500 font-medium">
-                    <span>{msg.sender}</span>
-                    <span className="text-[10px] text-slate-400">{msg.timestamp}</span>
-                    {msg.agent && (
-                      <span className="px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200 text-[10px] font-bold">
-                        {msg.agent}
+                  {/* Dynamic 45-minute Slots Pill Box */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-bold text-titanium-400 uppercase tracking-wide">
+                        Horarios Libres (45 min):
                       </span>
-                    )}
-                    {msg.intent && (
-                      <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold">
-                        {msg.intent}
+                      <span className="text-[10px] font-mono text-cyan-bright font-bold">
+                        {loadingSlots ? 'Consultando...' : `${availableSlots.length} disponibles`}
                       </span>
-                    )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                      {loadingSlots ? (
+                        <span className="text-xs text-titanium-400 italic">Cargando disponibilidad...</span>
+                      ) : availableSlots.length === 0 ? (
+                        <span className="text-xs text-titanium-400 italic">No hay horarios libres para esta fecha.</span>
+                      ) : (
+                        availableSlots.map((slot, i) => (
+                          <span
+                            key={i}
+                            className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-cyan-bright/10 text-cyan-bright border border-cyan-bright/30"
+                          >
+                            {slot} hs
+                          </span>
+                        ))
+                      )}
+                    </div>
                   </div>
-                  <div className={`p-4 rounded-2xl max-w-[88%] text-sm leading-relaxed whitespace-pre-line shadow-xs ${
-                    msg.isBot
-                      ? 'bg-white border border-slate-200 text-slate-800'
-                      : 'bg-teal-600 text-white font-medium shadow-teal-700/10'
-                  }`}>
-                    {msg.text}
-                  </div>
-                </div>
-              ))}
-              {simLoading && (
-                <div className="flex items-center gap-2 text-xs text-slate-500 italic p-3 bg-white rounded-2xl border border-slate-200 inline-flex shadow-xs animate-pulse">
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-teal-600" />
-                  Groq Llama 3.3 está analizando el caso y verificando Google Calendar...
-                </div>
-              )}
-            </div>
-
-            {/* Message Input Form */}
-            <form onSubmit={handleSendMessage} className="p-3 sm:p-4 bg-white border-t border-slate-200 flex gap-2">
-              <input
-                type="text"
-                value={simMessage}
-                onChange={e => setSimMessage(e.target.value)}
-                placeholder={`Escribe como paciente en ${simChannel.toUpperCase()}...`}
-                className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white transition"
-              />
-              <button
-                type="submit"
-                disabled={simLoading || !simMessage.trim()}
-                className="bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition shadow-xs"
-              >
-                <Send className="w-4 h-4" />
-                Enviar
-              </button>
-            </form>
-          </section>
-
-          {/* Google Calendar & Appointments Viewer */}
-          <section className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
-                  <CalendarIcon className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="font-bold text-sm text-slate-900 leading-tight">Agenda en Google Calendar</h2>
-                  <p className="text-[11px] text-slate-500">Franjas de 45 min con bloqueo estricto anti-colisión</p>
-                </div>
-              </div>
-              <span className="text-xs font-bold px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-200">
-                {appointments.length} turnos
-              </span>
-            </div>
-
-            {/* Date Selector & Available 45-min slots */}
-            <div className="p-4 bg-slate-50/60 border-b border-slate-200/80 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <CalendarCheck className="w-4 h-4 text-blue-600" /> Consultar Día:
-                </label>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={e => {
-                    setSelectedDate(e.target.value);
-                    fetchSlots(e.target.value);
-                  }}
-                  className="text-xs font-semibold bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Dynamic 45-minute Slots Pill Box */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
-                    Horarios Libres (45 min):
-                  </span>
-                  <span className="text-[10px] font-semibold text-blue-700">
-                    {loadingSlots ? 'Consultando...' : `${availableSlots.length} disponibles`}
-                  </span>
                 </div>
 
-                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-                  {loadingSlots ? (
-                    <span className="text-xs text-slate-400 italic">Cargando disponibilidad...</span>
-                  ) : availableSlots.length === 0 ? (
-                    <span className="text-xs text-slate-400 italic">No quedan horarios disponibles para este día.</span>
+                {/* Confirmed Appointments List */}
+                <div className="p-4 flex-1 overflow-y-auto max-h-[380px] space-y-3">
+                  {appointments.length === 0 ? (
+                    <div className="text-center py-12 text-titanium-400 text-xs italic">
+                      No hay citas agendadas registradas aún.
+                    </div>
                   ) : (
-                    availableSlots.map((slot, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => selectQuickPrompt(`Quiero agendar un turno para el día ${selectedDate} a las ${slot}`)}
-                        title="Hacer clic para pedir este turno en el chat"
-                        className="text-[11px] font-mono font-bold bg-white text-blue-700 border border-blue-200 hover:bg-blue-600 hover:text-white px-2 py-0.5 rounded-md transition shadow-2xs"
+                    appointments.map(appt => (
+                      <div
+                        key={appt.id}
+                        className="p-3.5 rounded-xl bg-sapphire-900/40 border border-white/10 hover:border-cyan-bright/40 transition flex items-center justify-between"
                       >
-                        {slot}
-                      </button>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-white">{appt.patient_name}</span>
+                            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-white/10 text-cyan-bright">
+                              {appt.channel}
+                            </span>
+                          </div>
+                          <p className="text-xs text-titanium-300">{appt.treatment}</p>
+                          <div className="flex items-center gap-2 text-[11px] text-titanium-400">
+                            <span>📅 {appt.date}</span>
+                            <span>⏰ {appt.time} hs</span>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Confirmado
+                        </span>
+                      </div>
                     ))
                   )}
                 </div>
+              </section>
+
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: 3-AGENT PIPELINE VISUALIZER */}
+        {activeDashboardTab === 'pipeline' && (
+          <section className="space-y-6">
+            <div className="text-center max-w-3xl mx-auto space-y-2 mb-8">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full glass-badge text-xs font-bold uppercase tracking-wider">
+                <BrainCircuit className="w-3.5 h-3.5" />
+                <span>Arquitectura Multi-Agente Modular</span>
+              </span>
+              <h2 className="text-2xl font-extrabold text-white">Pipeline de Decisión Clínica</h2>
+              <p className="text-xs text-titanium-400">
+                Cada agente opera en su propio directorio con aislamiento estricto, memoria en Neon Postgres (`pgvector`) y límite de 512 MB de RAM.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Agent 1: ReaderAgent */}
+              <div className="glass-card rounded-2xl p-6 border border-cyan-bright/30 relative overflow-hidden flex flex-col justify-between">
+                <div>
+                  <div className="w-12 h-12 rounded-xl bg-cyan-bright/10 border border-cyan-bright/40 text-cyan-bright flex items-center justify-center mb-4">
+                    <Smartphone className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-cyan-bright font-bold">Paso 1 • Ingesta</span>
+                  <h3 className="text-lg font-bold text-white mt-1">ReaderAgent ("El que Lee")</h3>
+                  <p className="text-xs text-titanium-300 mt-2 leading-relaxed">
+                    Normaliza mensajes multicanal (WhatsApp Baileys, Instagram, Facebook, YouTube) en el contrato <code className="text-cyan-bright">OmniChannelMessage</code>.
+                  </p>
+
+                  <div className="mt-4 pt-3 border-t border-white/10 space-y-2 text-xs">
+                    <div className="flex items-center justify-between text-titanium-400">
+                      <span>Módulo de Memoria:</span>
+                      <strong className="text-white font-mono">ReaderMemory</strong>
+                    </div>
+                    <div className="flex items-center justify-between text-titanium-400">
+                      <span>Ventana de Contexto:</span>
+                      <strong className="text-cyan-bright font-mono">Últimos 4 turnos</strong>
+                    </div>
+                    <div className="flex items-center justify-between text-titanium-400">
+                      <span>Tabla Neon:</span>
+                      <strong className="text-purple-300 font-mono">conversation_turns</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-white/10 flex items-center gap-1.5 text-xs text-emerald-400 font-semibold">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Normalización Zero-Loss
+                </div>
+              </div>
+
+              {/* Agent 2: AnalyzerAgent */}
+              <div className="glass-card rounded-2xl p-6 border border-purple-500/30 relative overflow-hidden flex flex-col justify-between">
+                <div>
+                  <div className="w-12 h-12 rounded-xl bg-purple-950/80 border border-purple-500/40 text-purple-300 flex items-center justify-center mb-4">
+                    <Cpu className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-purple-300 font-bold">Paso 2 • Semántica</span>
+                  <h3 className="text-lg font-bold text-white mt-1">AnalyzerAgent ("El que Analiza")</h3>
+                  <p className="text-xs text-titanium-300 mt-2 leading-relaxed">
+                    Clasifica la intención clínica, detecta niveles de dolor (urgencia vs rutina) y busca contexto en la base de conocimientos RAG.
+                  </p>
+
+                  <div className="mt-4 pt-3 border-t border-white/10 space-y-2 text-xs">
+                    <div className="flex items-center justify-between text-titanium-400">
+                      <span>Módulo de Memoria:</span>
+                      <strong className="text-white font-mono">AnalyzerMemory</strong>
+                    </div>
+                    <div className="flex items-center justify-between text-titanium-400">
+                      <span>Búsqueda Vectorial:</span>
+                      <strong className="text-purple-300 font-mono">pgvector Cosine Sim</strong>
+                    </div>
+                    <div className="flex items-center justify-between text-titanium-400">
+                      <span>Tabla Neon:</span>
+                      <strong className="text-purple-300 font-mono">treatment_embeddings</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-white/10 flex items-center gap-1.5 text-xs text-purple-300 font-semibold">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Clasificación de Intención
+                </div>
+              </div>
+
+              {/* Agent 3: SolverAgent */}
+              <div className="glass-card rounded-2xl p-6 border border-teal-500/30 relative overflow-hidden flex flex-col justify-between">
+                <div>
+                  <div className="w-12 h-12 rounded-xl bg-teal-950/80 border border-teal-500/40 text-teal-300 flex items-center justify-center mb-4">
+                    <Stethoscope className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-teal-300 font-bold">Paso 3 • Resolución</span>
+                  <h3 className="text-lg font-bold text-white mt-1">SolverAgent ("El que Resuelve")</h3>
+                  <p className="text-xs text-titanium-300 mt-2 leading-relaxed">
+                    Aplica triage clínico sin prescripción indebida, valida disponibilidad en Google Calendar, previene colisiones y responde al paciente.
+                  </p>
+
+                  <div className="mt-4 pt-3 border-t border-white/10 space-y-2 text-xs">
+                    <div className="flex items-center justify-between text-titanium-400">
+                      <span>Módulo de Memoria:</span>
+                      <strong className="text-white font-mono">SolverMemory</strong>
+                    </div>
+                    <div className="flex items-center justify-between text-titanium-400">
+                      <span>Auto-Pruning:</span>
+                      <strong className="text-teal-300 font-mono">Conserva top 4 turnos</strong>
+                    </div>
+                    <div className="flex items-center justify-between text-titanium-400">
+                      <span>Inferencia LLM:</span>
+                      <strong className="text-cyan-bright font-mono">Groq Llama 3.3 70B</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-white/10 flex items-center gap-1.5 text-xs text-teal-300 font-semibold">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Agenda Google Calendar
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* TAB 3: MEDIA GALLERY & PROMO VIDEO REEL */}
+        {activeDashboardTab === 'media' && (
+          <section className="space-y-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
+                  <Film className="w-5 h-5 text-cyan-bright" />
+                  Centro de Activos Visuales & Video Reel
+                </h2>
+                <p className="text-xs text-titanium-400">
+                  Activos generados para redes sociales y el nuevo video promocional de alta definición.
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold text-cyan-bright bg-cyan-bright/10 px-3 py-1 rounded-xl border border-cyan-bright/30">
+                5 Activos • 1 Reel MP4
+              </span>
+            </div>
+
+            {/* Video Showcase Card */}
+            <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-cyan-bright/35 shadow-2xl bg-sapphire-950/90 space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <span className="text-xs font-mono text-cyan-bright font-bold uppercase tracking-wider">
+                    ✦ Video Promocional Oficial
+                  </span>
+                  <h3 className="text-xl font-extrabold text-white mt-1">Lumina Promo Reel (1080x1080)</h3>
+                  <p className="text-xs text-titanium-300 mt-1">
+                    Cámara Ken Burns 3D, disolvencias cruzadas, rotulación médica y transcodificación H.264 web streaming.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="px-3 py-1 rounded-xl bg-white/5 border border-white/10 text-xs font-mono text-white">
+                    Tamaño: <strong>2.66 MB</strong> (&lt; 8 MB)
+                  </span>
+                  <span className="px-3 py-1 rounded-xl bg-cyan-bright/10 border border-cyan-bright/30 text-xs font-mono text-cyan-bright font-bold">
+                    30 FPS • H.264
+                  </span>
+                </div>
+              </div>
+
+              {/* Video Player */}
+              <div className="relative w-full max-w-2xl mx-auto aspect-square rounded-2xl overflow-hidden border border-cyan-bright/40 shadow-2xl bg-abyssal">
+                <video
+                  src="/social-kit/lumina-promo-reel.mp4"
+                  poster="/social-kit/lumina-cover.png"
+                  controls
+                  loop
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
               </div>
             </div>
 
-            {/* Appointments List */}
-            <div className="p-4 sm:p-5 flex-1 overflow-y-auto max-h-[460px] space-y-3">
-              {appointments.length === 0 ? (
-                <div className="text-center py-14 text-slate-400">
-                  <CalendarIcon className="w-12 h-12 mx-auto mb-2 opacity-25" />
-                  <p className="text-sm font-semibold text-slate-600">No hay citas registradas todavía</p>
-                  <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
-                    Usa el simulador o escribe por WhatsApp para agendar un turno de evaluación o limpieza.
-                  </p>
-                </div>
-              ) : (
-                appointments.map(appt => (
-                  <div
-                    key={appt.id}
-                    className="p-3.5 rounded-2xl border border-slate-200 bg-white hover:border-blue-300 transition shadow-2xs space-y-2"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h4 className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
-                          <UserCheck className="w-3.5 h-3.5 text-teal-600" />
-                          {appt.patient_name}
-                        </h4>
-                        <p className="text-[11px] text-slate-500">{appt.treatment}</p>
-                      </div>
-                      <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        {appt.status}
-                      </span>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 font-medium">
-                      <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1 text-slate-700">
-                          <CalendarIcon className="w-3 h-3 text-blue-600" /> {appt.date}
-                        </span>
-                        <span className="flex items-center gap-1 text-slate-700">
-                          <Clock className="w-3 h-3 text-blue-600" /> {appt.time} hs
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                        Vía {appt.channel}
+            {/* Visual Assets Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {CLINICAL_ASSETS.map((asset, idx) => (
+                <div
+                  key={idx}
+                  className="glass-card rounded-2xl overflow-hidden border border-white/10 hover:border-cyan-bright/40 transition-all duration-300 flex flex-col justify-between group shadow-xl"
+                >
+                  <div className="relative w-full aspect-square overflow-hidden bg-abyssal">
+                    <Image
+                      src={`/social-kit/${asset.filename}`}
+                      alt={asset.name}
+                      fill
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute top-3 left-3">
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-abyssal/80 text-cyan-bright border border-cyan-bright/30 backdrop-blur-md">
+                        {asset.type}
                       </span>
                     </div>
                   </div>
-                ))
-              )}
+
+                  <div className="p-4 space-y-2 bg-sapphire-950/80">
+                    <h4 className="font-bold text-sm text-white group-hover:text-cyan-bright transition-colors">
+                      {asset.name}
+                    </h4>
+                    <p className="text-xs text-titanium-400">
+                      {asset.desc}
+                    </p>
+                    <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[11px] text-titanium-500 font-mono">
+                      <span>/social-kit/{asset.filename}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
+        )}
 
-        </div>
       </main>
 
       {/* WhatsApp QR Modal */}
       {showQrModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-150">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <Smartphone className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 text-sm">Vincular WhatsApp de la Clínica</h3>
-                  <p className="text-[11px] text-slate-500">Motor Baileys con persistencia en Neon</p>
-                </div>
+        <div className="fixed inset-0 z-50 bg-abyssal/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="glass-panel rounded-3xl p-6 sm:p-8 max-w-md w-full border border-cyan-bright/40 shadow-2xl relative bg-sapphire-950">
+            <div className="text-center space-y-3 mb-6">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-400 flex items-center justify-center">
+                <QrCode className="w-6 h-6" />
               </div>
-              <button
-                onClick={() => setShowQrModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-base font-bold p-1"
-              >
-                ✕
-              </button>
+              <h3 className="text-lg font-bold text-white">Vincular WhatsApp de la Clínica</h3>
+              <p className="text-xs text-titanium-300">
+                Abre WhatsApp en tu teléfono, ve a <strong>Dispositivos vinculados</strong> y escanea el código.
+              </p>
             </div>
 
-            <div className="text-center py-3">
-              {waData.status === 'connected' ? (
-                <div className="space-y-4 py-4">
-                  <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
-                    <CheckCircle2 className="w-8 h-8" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-emerald-800 text-base">¡WhatsApp ya está conectado!</h4>
-                    <p className="text-xs text-slate-500 mt-1">
-                      El asistente de IA está respondiendo y agendando turnos desde el número de la clínica.
-                    </p>
-                    {waData.user && (
-                      <p className="font-mono text-xs font-bold text-slate-700 bg-slate-100 py-1 px-3 rounded-lg mt-2 inline-block">
-                        {waData.user}
-                      </p>
-                    )}
-                  </div>
-                  <div className="p-3 bg-purple-50 text-purple-800 rounded-xl text-xs font-medium border border-purple-200 text-left">
-                    ⚡ <strong>Persistencia Activa:</strong> Las claves criptográficas Signal están guardadas en Neon PostgreSQL. Aunque se reinicie el servidor, no tendrás que volver a escanear el QR.
-                  </div>
-                  <button
-                    onClick={handleDisconnectWhatsApp}
-                    disabled={isDisconnectingWA}
-                    className="w-full py-2.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl transition border border-rose-200 flex items-center justify-center gap-1.5"
-                  >
-                    <Power className="w-3.5 h-3.5" />
-                    {isDisconnectingWA ? 'Cerrando sesión...' : 'Desvincular Dispositivo y Purgar Sesión'}
-                  </button>
-                </div>
-              ) : qrCode ? (
-                <div className="space-y-4">
-                  <div className="p-3 bg-white border-2 border-slate-200 rounded-2xl inline-block shadow-inner">
-                    <img src={qrCode} alt="WhatsApp QR Code" className="w-64 h-64 mx-auto rounded-lg" />
-                  </div>
-                  <div className="text-left text-xs text-slate-600 space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                    <p className="font-bold text-slate-800 mb-1">Pasos para conectar:</p>
-                    <p>1. Abre WhatsApp en el celular del consultorio.</p>
-                    <p>2. Ve a <strong>Ajustes &gt; Dispositivos vinculados</strong>.</p>
-                    <p>3. Presiona <strong>Vincular dispositivo</strong> y apunta al código QR.</p>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-slate-500">
-                    <span>Modo de almacenamiento:</span>
-                    <strong className="text-purple-700 uppercase">{waData.storage}</strong>
-                  </div>
+            <div className="bg-white p-4 rounded-2xl flex items-center justify-center min-h-[260px] shadow-inner">
+              {qrCode ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={qrCode} alt="WhatsApp QR Code" className="w-60 h-60 object-contain" />
+              ) : waData.status === 'connected' ? (
+                <div className="text-center space-y-2 text-emerald-600">
+                  <CheckCircle2 className="w-12 h-12 mx-auto" />
+                  <p className="font-bold text-sm">¡WhatsApp ya está conectado!</p>
+                  <p className="text-xs text-slate-500">{waData.user}</p>
                 </div>
               ) : (
-                <div className="py-10 space-y-3 text-slate-500">
+                <div className="text-center space-y-3 text-slate-500">
                   <RefreshCw className="w-8 h-8 animate-spin mx-auto text-teal-600" />
-                  <p className="text-xs font-medium">Iniciando microservicio y generando código QR...</p>
-                  <p className="text-[11px] text-slate-400">Verifica que el servicio esté ejecutándose en el puerto 3001.</p>
+                  <p className="text-xs font-semibold">Generando código QR...</p>
+                  <button
+                    onClick={handleConnectWhatsApp}
+                    disabled={isConnectingWA}
+                    className="text-xs bg-teal-600 text-white px-3 py-1.5 rounded-lg font-bold"
+                  >
+                    Iniciar Conexión
+                  </button>
                 </div>
               )}
             </div>
 
-            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-              <button
-                onClick={fetchWhatsAppStatus}
-                className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 font-semibold"
-              >
-                <RefreshCw className="w-3 h-3" /> Refrescar QR
-              </button>
+            <div className="mt-6 flex justify-end">
               <button
                 onClick={() => setShowQrModal(false)}
-                className="px-4 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition"
+                className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition cursor-pointer"
               >
                 Cerrar
               </button>

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Smartphone, CheckCircle2, Calendar, Sparkles, Send, ShieldCheck } from 'lucide-react';
+import { Smartphone, CheckCircle2, Sparkles, Send, Play, Film } from 'lucide-react';
 
 const FacebookIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="currentColor" viewBox="0 0 24 24">
@@ -15,14 +15,35 @@ const InstagramIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const YoutubeIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-  </svg>
-);
-
 export default function OmniChannelMockup() {
   const [activeTab, setActiveTab] = useState<'whatsapp' | 'instagram' | 'meta'>('whatsapp');
+
+  const channelInfo = {
+    whatsapp: {
+      patientChannel: 'WhatsApp Directo',
+      patientColor: 'text-emerald-400',
+      patientIcon: Smartphone,
+      patientMsg: '¡Hola! Me duele una muela del juicio, ¿tienen turno disponible hoy o mañana por la mañana?',
+      botMsg: 'Lamentamos tu molestia. Por la urgencia, tenemos un espacio prioritario reservado mañana a las 09:45 hs o 11:15 hs. ¿Deseas que confirmemos alguno a tu nombre?',
+    },
+    instagram: {
+      patientChannel: 'Instagram Direct',
+      patientColor: 'text-pink-400',
+      patientIcon: InstagramIcon,
+      patientMsg: 'Buenas tardes! Vi su reel de blanqueamiento láser, ¿cuál es el precio y cuánto dura la sesión?',
+      botMsg: '¡Hola! El tratamiento se completa en 1 sesión de 45 minutos. El costo incluye profilaxis previa. ¿Te gustaría agendar una evaluación para este viernes a las 15:00 hs?',
+    },
+    meta: {
+      patientChannel: 'Facebook Messenger',
+      patientColor: 'text-blue-400',
+      patientIcon: FacebookIcon,
+      patientMsg: 'Hola, quisiera consultar si realizan implantes guiados en 3D para una rehabilitación completa.',
+      botMsg: '¡Hola! Sí, contamos con tomografía digital y cirugía guiada por ordenador de máxima precisión. Tenemos disponibilidad diagnóstica el lunes a las 10:30 hs.',
+    }
+  };
+
+  const current = channelInfo[activeTab];
+  const CurrentIcon = current.patientIcon;
 
   return (
     <section 
@@ -44,8 +65,8 @@ export default function OmniChannelMockup() {
               Nuestros agentes se encargan del resto.
             </span>
           </h2>
-          <p className="text-slate-400 text-sm sm:text-base">
-            El sistema multi-agente interpreta la intención, valida la agenda médica en Google Calendar y confirma tu turno sin intermediarios.
+          <p className="text-titanium-300 text-sm sm:text-base">
+            El sistema multi-agente interpreta la intención, valida la agenda médica en Google Calendar y confirma tu turno sin intermediarios ni demoras.
           </p>
         </div>
 
@@ -53,10 +74,10 @@ export default function OmniChannelMockup() {
         <div className="flex items-center justify-center gap-2 mb-8">
           <button
             onClick={() => setActiveTab('whatsapp')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'whatsapp'
-                ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20'
-                : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10'
+                ? 'bg-emerald-500 text-abyssal shadow-lg shadow-emerald-500/25 scale-102'
+                : 'bg-sapphire-900/40 text-titanium-300 hover:bg-sapphire-900/70 border border-white/10'
             }`}
           >
             <Smartphone className="w-4 h-4" />
@@ -64,10 +85,10 @@ export default function OmniChannelMockup() {
           </button>
           <button
             onClick={() => setActiveTab('instagram')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'instagram'
-                ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg shadow-pink-500/20'
-                : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10'
+                ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg shadow-pink-500/25 scale-102'
+                : 'bg-sapphire-900/40 text-titanium-300 hover:bg-sapphire-900/70 border border-white/10'
             }`}
           >
             <InstagramIcon className="w-4 h-4" />
@@ -75,10 +96,10 @@ export default function OmniChannelMockup() {
           </button>
           <button
             onClick={() => setActiveTab('meta')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'meta'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25 scale-102'
+                : 'bg-sapphire-900/40 text-titanium-300 hover:bg-sapphire-900/70 border border-white/10'
             }`}
           >
             <FacebookIcon className="w-4 h-4" />
@@ -86,68 +107,71 @@ export default function OmniChannelMockup() {
           </button>
         </div>
 
-        {/* 3D ARTWORK CONTAINER WITH FLOATING OVERLAYS (16:9 Widescreen) */}
-        <div className="relative w-full max-w-5xl mx-auto rounded-3xl overflow-hidden border border-cyan-bright/20 shadow-2xl bg-gradient-to-b from-sapphire-900/40 via-sapphire-950 to-slate-950">
+        {/* HOLOGRAPHIC VIDEO PLAYER CONTAINER */}
+        <div className="relative w-full max-w-5xl mx-auto rounded-3xl overflow-hidden border border-cyan-bright/30 shadow-[0_0_50px_rgba(0,229,255,0.15)] bg-gradient-to-b from-sapphire-900/60 via-sapphire-950 to-abyssal-950">
           
           {/* Ambient Glow */}
           <div className="absolute inset-0 bg-radial from-cyan-bright/10 via-transparent to-transparent pointer-events-none -z-10" />
 
-          {/* RENDER 3D NANO BANA2: Arte Conceptual Omnicanal (Aspect Ratio 16:9) */}
-          {/* INSTRUCCIÓN: Cuando generes el render 3D con Nano Bana2, guárdalo en /public/images/3d/omnichannel-core-3d.webp y sustituye este placeholder con <Image src="/images/3d/omnichannel-core-3d.webp" alt="Núcleo Omnicanal Lumina 3D" fill className="object-cover opacity-60" priority /> */}
-          <div 
-            className="w-full aspect-[16/9] min-h-[380px] md:min-h-[480px] bg-slate-900/80 border border-cyan-bright/30 animate-pulse flex flex-col items-center justify-center text-center p-6 relative overflow-hidden"
-            role="img"
-            aria-label="Render 3D Nano Bana2: Núcleo geométrico 3D de cristal dental en Sapphire #0F3D56 emitiendo haces lumínicos en Cyan #00E5FF conectados a redes y Google Calendar"
-          >
-            <div className="w-20 h-20 rounded-3xl bg-cyan-bright/10 border border-cyan-bright/40 flex items-center justify-center text-cyan-bright mb-3">
-              <Sparkles className="w-10 h-10 drop-shadow-[0_0_15px_rgba(0,229,255,0.8)]" />
+          {/* Video Reel Showcase */}
+          <div className="relative w-full aspect-video min-h-[360px] md:min-h-[480px] bg-abyssal flex items-center justify-center overflow-hidden">
+            <video
+              src="/social-kit/lumina-promo-reel.mp4"
+              poster="/social-kit/lumina-cover.png"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              className="w-full h-full object-cover opacity-85"
+            />
+            {/* Holographic Scanline Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-b from-cyan-bright/5 via-transparent to-abyssal/80 pointer-events-none" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_40%,rgba(5,19,32,0.6)_100%)] pointer-events-none" />
+            
+            {/* Top Video Header Tag */}
+            <div className="absolute top-4 left-4 sm:top-6 sm:left-6 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-sapphire-950/80 border border-cyan-bright/30 backdrop-blur-md text-xs font-semibold text-white pointer-events-none">
+              <Film className="w-3.5 h-3.5 text-cyan-bright" />
+              <span>Lumina Cinematic Reel • 1080p</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-1" />
             </div>
-            <p className="font-bold text-sm text-white uppercase tracking-wider">
-              Render 3D Nano Bana2: [Arte Conceptual Omnicanal "Lumina Core"]
-            </p>
-            <p className="text-xs text-slate-400 mt-1 max-w-md">
-              Aspect Ratio: <strong>16:9</strong> (Widescreen 1920x1080px, perspectiva isométrica futurista)
-            </p>
-            <span className="mt-3 text-xs font-mono text-cyan-bright/90 bg-cyan-bright/10 px-3 py-1 rounded border border-cyan-bright/20">
-              /public/images/3d/omnichannel-core-3d.webp
-            </span>
           </div>
 
           {/* Floating Live Conversation Overlays (Glassmorphism) */}
           <div className="absolute inset-0 p-4 sm:p-8 md:p-10 flex flex-col justify-between pointer-events-none">
             
             {/* Top Left Floating Chat: Patient Message */}
-            <div className="self-start max-w-xs sm:max-w-sm rounded-2xl p-4 bg-sapphire-950/80 border border-white/20 backdrop-blur-xl shadow-xl space-y-1.5 animate-float gpu-layer pointer-events-auto">
-              <div className="flex items-center justify-between text-[11px] text-slate-400 font-semibold">
-                <span className="flex items-center gap-1.5 text-emerald-400">
-                  <Smartphone className="w-3.5 h-3.5" /> Paciente vía WhatsApp
+            <div className="self-start max-w-xs sm:max-w-sm rounded-2xl p-4 bg-sapphire-950/90 border border-white/20 backdrop-blur-xl shadow-2xl space-y-1.5 animate-float gpu-layer pointer-events-auto">
+              <div className="flex items-center justify-between text-[11px] text-titanium-400 font-semibold">
+                <span className={`flex items-center gap-1.5 ${current.patientColor}`}>
+                  <CurrentIcon className="w-3.5 h-3.5" /> {current.patientChannel}
                 </span>
                 <span>Hoy 10:14 hs</span>
               </div>
               <p className="text-xs sm:text-sm text-slate-100 font-medium">
-                "Hola! Me duele una muela del juicio, ¿tienen turno disponible hoy o mañana por la mañana?"
+                "{current.patientMsg}"
               </p>
             </div>
 
             {/* Bottom Right Floating Chat: Agent Intelligent Resolution */}
-            <div className="self-end max-w-xs sm:max-w-md rounded-2xl p-4 bg-sapphire-900/90 border border-cyan-bright/40 backdrop-blur-xl shadow-2xl space-y-2 gpu-layer pointer-events-auto">
+            <div className="self-end max-w-xs sm:max-w-md rounded-2xl p-4 bg-sapphire-900/95 border border-cyan-bright/50 backdrop-blur-xl shadow-[0_0_30px_rgba(0,229,255,0.2)] space-y-2 gpu-layer pointer-events-auto">
               <div className="flex items-center justify-between text-[11px] text-cyan-bright font-bold">
                 <span className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-cyan-bright animate-ping" />
                   Asistente IA • Triage Clínico
                 </span>
-                <span className="bg-cyan-bright/20 text-cyan-bright px-2 py-0.5 rounded text-[10px]">
-                  Groq 70B
+                <span className="bg-cyan-bright/20 text-cyan-bright px-2 py-0.5 rounded text-[10px] font-mono border border-cyan-bright/30">
+                  Groq Llama 3.3
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-slate-100 leading-relaxed">
-                "Lamentamos tu dolor. Por la urgencia, tenemos un espacio prioritario mañana a las <strong>09:45 hs</strong> o <strong>11:15 hs</strong>. ¿Deseas que reservemos alguno a tu nombre?"
+                "{current.botMsg}"
               </p>
               <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[11px] text-slate-300 font-medium">
-                <span className="flex items-center gap-1 text-teal-300 font-semibold">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Horario verificado en Google Calendar
+                <span className="flex items-center gap-1 text-cyan-bright font-semibold">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-cyan-bright" /> Horario verificado en Google Calendar
                 </span>
-                <span className="text-[10px] text-slate-400 font-mono">45 min</span>
+                <span className="text-[10px] text-titanium-400 font-mono">45 min</span>
               </div>
             </div>
 

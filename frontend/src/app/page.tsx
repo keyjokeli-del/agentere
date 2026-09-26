@@ -11,24 +11,24 @@ import Footer from '@/components/landing/Footer';
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-sapphire-950 text-slate-100 selection:bg-cyan-bright selection:text-sapphire-950 relative">
+    <div className="min-h-screen bg-abyssal text-diamond selection:bg-cyan-bright selection:text-abyssal relative overflow-x-hidden">
       {/* Global subtle radial ambient gradient */}
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(15,61,86,0.5),rgba(8,34,49,1))] pointer-events-none -z-20" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(15,61,86,0.45),rgba(5,19,32,1))] pointer-events-none -z-20" />
 
-      {/* 1. Glass Navbar */}
+      {/* 1. Glass Navbar with 3D logo & cyan glow */}
       <Navbar />
 
       <main>
-        {/* 2. Hero Section (with 3D mascot Lumi placeholder) */}
+        {/* 2. Hero Section with 3D Emblem and cover texture */}
         <Hero />
 
         {/* 3. Clinical Trust Metrics & Stats */}
         <TrustMetrics />
 
-        {/* 4. 4 Clinical & Technological Pillars */}
+        {/* 4. 3D Vitrine of Treatments with one-click booking triggers */}
         <Features />
 
-        {/* 5. OmniChannel Showcase (with 16:9 3D conceptual art placeholder) */}
+        {/* 5. OmniChannel Showcase with holographic looping video reel */}
         <OmniChannelMockup />
 
         {/* 6. Interactive Booking CTA & 45-min Slot Picker */}

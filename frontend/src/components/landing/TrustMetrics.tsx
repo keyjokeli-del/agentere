@@ -34,7 +34,7 @@ export default function TrustMetrics() {
   return (
     <section 
       aria-label="Indicadores de confianza y calidad clínica"
-      className="py-12 border-y border-white/10 bg-sapphire-950/60 backdrop-blur-md"
+      className="py-12 border-y border-cyan-bright/15 bg-abyssal/90 backdrop-blur-md"
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 lg:gap-8">
@@ -43,9 +43,9 @@ export default function TrustMetrics() {
             return (
               <div 
                 key={i} 
-                className="text-center md:text-left flex flex-col items-center md:items-start p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-cyan-bright/30 transition-colors group"
+                className="text-center md:text-left flex flex-col items-center md:items-start p-5 rounded-2xl bg-sapphire-950/60 border border-white/5 hover:border-cyan-bright/40 transition-all duration-300 group shadow-lg"
               >
-                <div className="w-10 h-10 rounded-xl bg-cyan-bright/10 text-cyan-bright flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                <div className="w-10 h-10 rounded-xl bg-cyan-bright/10 text-cyan-bright flex items-center justify-center mb-3 group-hover:scale-110 group-hover:shadow-[0_0_15px_rgba(0,229,255,0.4)] transition-all">
                   <Icon className="w-5 h-5" />
                 </div>
                 <span className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
@@ -54,7 +54,7 @@ export default function TrustMetrics() {
                 <span className="text-xs sm:text-sm font-bold text-cyan-bright mt-0.5">
                   {metric.label}
                 </span>
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p className="text-[11px] text-titanium-400 mt-1">
                   {metric.detail}
                 </p>
               </div>

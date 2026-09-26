@@ -3,14 +3,15 @@
 @tailwind utilities;
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #051320;
+  --foreground: #F8FAFC;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  overflow-x: hidden;
 }
 
 @layer utilities {
@@ -19,10 +20,16 @@ body {
     @apply backdrop-blur-xl bg-sapphire-950/80 border border-white/10 shadow-glass-card;
   }
   .glass-card {
-    @apply backdrop-blur-xl bg-sapphire-900/30 border border-white/10 shadow-glass-card;
+    @apply backdrop-blur-xl bg-sapphire-900/40 border border-cyan-bright/20 shadow-glass-card;
+  }
+  .glass-card-hover {
+    @apply backdrop-blur-xl bg-sapphire-900/40 border border-cyan-bright/20 shadow-glass-card hover:border-cyan-bright/50 hover:shadow-glass-hover transition-all duration-300;
   }
   .glass-badge {
-    @apply backdrop-blur-md bg-sapphire-900/60 border border-cyan-bright/30 text-cyan-bright shadow-glass-card;
+    @apply backdrop-blur-md bg-sapphire-900/70 border border-cyan-bright/40 text-cyan-bright shadow-glass-card;
+  }
+  .glass-input {
+    @apply bg-sapphire-950/70 border border-white/15 focus:border-cyan-bright/60 focus:ring-1 focus:ring-cyan-bright text-white placeholder-titanium-400 outline-none;
   }
 
   /* GPU Compositing Layer Isolation to eliminate paint thrashing */
@@ -31,4 +38,20 @@ body {
     will-change: transform;
     isolation: isolate;
   }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #051320;
+}
+::-webkit-scrollbar-thumb {
+  background: #0F3D56;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00E5FF;
 }

@@ -1,116 +1,158 @@
 'use client';
 
 import React from 'react';
-import { Bot, CalendarCheck, Share2, Award, Zap, Shield, Sparkles } from 'lucide-react';
+import Image from 'next/image';
+import { Calendar, ArrowRight, Zap, Shield, Sparkles, CheckCircle2 } from 'lucide-react';
 
-const FEATURES_DATA = [
+const TREATMENTS_DATA = [
   {
-    id: 'triage-ai',
-    title: 'Triaje Clínico Inmediato 24/7',
-    subtitle: 'Groq Llama 3.3',
-    description: 'Comprende el motivo de consulta con precisión humana. Prioriza dolor agudo e inflamación y orienta al paciente sin diagnósticos vinculantes riesgosos.',
-    tag: 'Triage de Urgencias',
-    icon: Bot,
-    glowColor: 'group-hover:border-cyan-bright/50'
+    id: 'blanqueamiento-laser',
+    title: 'Blanqueamiento Dental Láser',
+    category: 'Estética Dental',
+    subtitle: 'Fotoactivación en Frío de Alta Precisión',
+    description: 'Elimina manchas severas de café y tabaco en una sola sesión clínica de 45 minutos. Fórmula protectora que previene la sensibilidad gingival.',
+    image: '/social-kit/ig-post-blanqueamiento.png',
+    features: ['Sesión única de 45 min', 'Hasta 8 tonos más blanco', 'Cero sensibilidad posterior'],
+    badge: 'Popular',
+    accent: 'border-cyan-bright/40 text-cyan-bright',
   },
   {
-    id: 'anti-collision-calendar',
-    title: 'Agenda Google Calendar Anti-Colisión',
-    subtitle: 'Franjas de 45 min',
-    description: 'Calcula dinámicamente turnos libres entre 09:00 y 19:00 hs. Bloquea colisiones al instante y ofrece alternativas automáticas si un horario ya fue reservado.',
-    tag: 'Cero Duplicados',
-    icon: CalendarCheck,
-    glowColor: 'group-hover:border-teal-400/50'
+    id: 'implantes-guiados-3d',
+    title: 'Implantes Guiados 3D',
+    category: 'Implantología Digital',
+    subtitle: 'Planificación Tomográfica Computarizada',
+    description: 'Fijación de implantes de titanio grado quirúrgico con guías 3D personalizadas. Cirugía mínimamente invasiva con recuperación acelerada.',
+    image: '/social-kit/ig-post-implantes.png',
+    features: ['Guía quirúrgica 3D', 'Titanio biocompatible', 'Recuperación express'],
+    badge: 'Alta Complejidad',
+    accent: 'border-teal-400/40 text-teal-300',
   },
   {
-    id: 'omnichannel-zero-cost',
-    title: 'Atención Omnicanal a Costo $0',
-    subtitle: 'WhatsApp • Meta • YouTube',
-    description: 'Tus pacientes escriben por WhatsApp (Baileys con persistencia en Neon), Facebook Messenger, Instagram Direct o comentarios de YouTube con respuesta instantánea.',
-    tag: 'Sin Costos Mensuales',
-    icon: Share2,
-    glowColor: 'group-hover:border-blue-400/50'
-  },
-  {
-    id: 'clinical-precision',
-    title: 'Odontología de Precisión',
-    subtitle: 'Profesionales Matriculados',
-    description: 'Equipamiento digital de última generación para limpiezas, blanqueamientos, ortodoncia invisible y rehabilitación integral con presupuesto transparente.',
-    tag: 'Calidad Médica',
-    icon: Award,
-    glowColor: 'group-hover:border-cyan-bright/50'
+    id: 'urgencias-triage-247',
+    title: 'Triage de Urgencias 24/7',
+    category: 'Guardia Inmediata',
+    subtitle: 'Priorización y Alivio Inmediato',
+    description: 'Asistencia prioritaria para dolor agudo, inflamación o traumatismos. Nuestro agente inteligente evalúa el cuadro y bloquea un turno de urgencia en Calendar.',
+    image: '/social-kit/ig-post-urgencias.png',
+    features: ['Atención en el día', 'Triage instantáneo vía WhatsApp', 'Protocolo anti-dolor'],
+    badge: '24 Horas',
+    accent: 'border-rose-400/40 text-rose-300',
   }
 ];
 
 export default function Features() {
+  const handleSelectTreatment = (treatmentTitle: string) => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('lumina:select-treatment', {
+          detail: { treatment: treatmentTitle }
+        })
+      );
+      const bookingSection = document.getElementById('agendar');
+      if (bookingSection) {
+        bookingSection.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  };
+
   return (
     <section 
       id="tratamientos"
-      aria-label="Pilares y características del servicio Lumina"
+      aria-label="Vitrina 3D de tratamientos y servicios clínicos de Lumina Dental Studio"
       className="py-16 md:py-24 relative overflow-hidden"
     >
-      {/* Background Accent Lines */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto space-y-4 mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass-badge text-xs font-bold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-badge text-xs font-bold uppercase tracking-wider">
             <Zap className="w-3.5 h-3.5" />
-            <span>Innovación al Servicio del Paciente</span>
+            <span>Tratamientos & Odontología Avanzada</span>
           </div>
           <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
-            La combinación perfecta entre{' '}
+            Excelencia clínica respaldada por{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-bright to-teal-300">
-              atención médica de excelencia
-            </span>{' '}
-            e inteligencia artificial
+              tecnología digital y robótica
+            </span>
           </h2>
-          <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
-            Eliminamos las esperas telefónicas y la falta de respuesta. Desde tu primer mensaje hasta la atención en el sillón odontológico, cada paso está diseñado para tu comodidad.
+          <p className="text-titanium-300 text-sm sm:text-base leading-relaxed">
+            Explora nuestros tratamientos principales. Selecciona el servicio que necesitas y nuestro sistema coordinará tu cita directamente en la agenda médica.
           </p>
         </div>
 
-        {/* 4 Pillars Grid (Glassmorphism Cards) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
-          {FEATURES_DATA.map((feat) => {
-            const Icon = feat.icon;
-            return (
-              <div
-                key={feat.id}
-                className={`group relative rounded-3xl p-7 glass-card gpu-layer hover:border-cyan-bright/40 transition-all duration-300 hover:-translate-y-1 overflow-hidden ${feat.glowColor}`}
-              >
-                {/* Subtle Inner Glow on Hover */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-bright/5 rounded-full blur-2xl group-hover:bg-cyan-bright/15 transition-all duration-500 pointer-events-none" />
-
-                <div className="flex items-start justify-between mb-5">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sapphire-800 to-sapphire-950 border border-cyan-bright/30 flex items-center justify-center text-cyan-bright shadow-inner group-hover:scale-110 transition-transform duration-300">
-                    <Icon className="w-6 h-6" />
-                  </div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/5 text-cyan-bright border border-white/10">
-                    {feat.tag}
+        {/* 3D Showcase Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {TREATMENTS_DATA.map((treatment) => (
+            <div
+              key={treatment.id}
+              className="group rounded-3xl overflow-hidden glass-card gpu-layer hover:border-cyan-bright/50 transition-all duration-300 hover:-translate-y-1.5 flex flex-col justify-between shadow-2xl relative"
+            >
+              {/* Image Container with Zoom Effect */}
+              <div className="relative w-full aspect-square overflow-hidden bg-abyssal">
+                <Image
+                  src={treatment.image}
+                  alt={treatment.title}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  className="object-cover group-hover:scale-108 transition-transform duration-500"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-sapphire-950 via-sapphire-950/20 to-transparent" />
+                
+                {/* Badge Tag */}
+                <div className="absolute top-4 left-4">
+                  <span className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-sapphire-950/80 backdrop-blur-md text-white border border-white/20">
+                    {treatment.category}
                   </span>
                 </div>
-
-                <div className="space-y-2">
-                  <span className="text-xs font-mono font-semibold text-cyan-bright/80 tracking-wide uppercase">
-                    {feat.subtitle}
+                
+                <div className="absolute top-4 right-4">
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase bg-abyssal/90 backdrop-blur-md border ${treatment.accent}`}>
+                    {treatment.badge}
                   </span>
-                  <h3 className="text-lg sm:text-xl font-bold text-white group-hover:text-cyan-bright transition-colors">
-                    {feat.title}
+                </div>
+              </div>
+
+              {/* Card Body */}
+              <div className="p-6 flex-1 flex flex-col justify-between space-y-4 bg-sapphire-950/70">
+                <div className="space-y-2">
+                  <span className="text-[11px] font-mono text-cyan-bright font-semibold uppercase tracking-wider">
+                    {treatment.subtitle}
+                  </span>
+                  <h3 className="text-xl font-bold text-white group-hover:text-cyan-bright transition-colors">
+                    {treatment.title}
                   </h3>
-                  <p className="text-slate-300 text-xs sm:text-sm leading-relaxed pt-1">
-                    {feat.description}
+                  <p className="text-titanium-300 text-xs sm:text-sm leading-relaxed">
+                    {treatment.description}
                   </p>
                 </div>
 
-                {/* Micro Guarantee Bullet */}
-                <div className="mt-6 pt-4 border-t border-white/10 flex items-center gap-2 text-xs text-slate-400 font-medium">
-                  <Shield className="w-3.5 h-3.5 text-teal-400" />
-                  <span>Protocolo certificado de confidencialidad médica</span>
+                {/* Micro Features List */}
+                <div className="space-y-2 pt-3 border-t border-white/10">
+                  {treatment.features.map((feat, idx) => (
+                    <div key={idx} className="flex items-center gap-2 text-xs text-titanium-300">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-cyan-bright shrink-0" />
+                      <span>{feat}</span>
+                    </div>
+                  ))}
                 </div>
+
+                {/* Action CTA: Agendar este tratamiento */}
+                <div className="pt-4">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTreatment(treatment.title)}
+                    className="w-full py-3 px-4 rounded-xl bg-white/10 hover:bg-cyan-bright hover:text-abyssal text-white font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 border border-white/15 hover:border-cyan-bright shadow-xs cursor-pointer group/btn"
+                  >
+                    <Calendar className="w-4 h-4 text-cyan-bright group-hover/btn:text-abyssal transition-colors" />
+                    <span>Agendar este tratamiento</span>
+                    <ArrowRight className="w-3.5 h-3.5 ml-1 group-hover/btn:translate-x-1 transition-transform" />
+                  </button>
+                </div>
+
               </div>
-            );
-          })}
+
+            </div>
+          ))}
         </div>
 
       </div>
