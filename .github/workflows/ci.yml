@@ -1,0 +1,86 @@
+name: CI / Cloud Verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-quality:
+    name: Backend Pytest & MyPy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pytest mypy types-requests
+
+      - name: Run Pytest Suite (34 tests)
+        env:
+          PYTHONPATH: backend
+        run: |
+          pytest backend/tests -v
+
+      - name: Run MyPy Static Typing
+        env:
+          PYTHONPATH: backend
+        run: |
+          mypy backend/app --ignore-missing-imports
+
+  whatsapp-service-tests:
+    name: WhatsApp Baileys & Neon Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: whatsapp-service/package-lock.json
+
+      - name: Install WhatsApp Bridge Dependencies
+        working-directory: whatsapp-service
+        run: npm ci
+
+      - name: Run WhatsApp Test Suite
+        working-directory: whatsapp-service
+        run: npm test
+
+  frontend-build:
+    name: Next.js Production Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build Next.js Dashboard & Landing
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_BACKEND_URL: "https://lumina-backend-rti9.onrender.com"
+          NEXT_PUBLIC_WHATSAPP_URL: "https://lumina-whatsapp.onrender.com"
+        run: npm run build
