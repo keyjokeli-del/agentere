@@ -46,7 +46,7 @@ class ReaderAgent:
         text = ""
         metadata: Dict[str, Any] = {"object": payload.get("object", "page")}
 
-        if payload.get("object") == "instagram":
+        if payload.get("object") == "instagram" or payload.get("field") == "messages":
             channel = "instagram"
 
         if entries and isinstance(entries, list):
@@ -56,12 +56,44 @@ class ReaderAgent:
                 event = messaging[0]
                 sender_id = str(event.get("sender", {}).get("id") or "unknown_meta")
                 msg_obj = event.get("message", {})
-                text = str(msg_obj.get("text") or "").strip()
-                metadata["mid"] = msg_obj.get("mid")
+                if isinstance(msg_obj, dict):
+                    text = str(msg_obj.get("text") or "").strip()
+                    metadata["mid"] = msg_obj.get("mid")
                 metadata["recipient_id"] = event.get("recipient", {}).get("id")
 
+            changes = first_entry.get("changes", [])
+            if not text and changes and isinstance(changes, list):
+                change = changes[0]
+                val = change.get("value", {})
+                if isinstance(val, dict):
+                    sender_id = str(val.get("sender", {}).get("id") or val.get("from", {}).get("id") or sender_id)
+                    msg_obj = val.get("message", {})
+                    if isinstance(msg_obj, dict):
+                        text = str(msg_obj.get("text") or "").strip()
+                        metadata["mid"] = msg_obj.get("mid")
+                    elif isinstance(msg_obj, str):
+                        text = msg_obj.strip()
+
+        # Handle top-level value (e.g., Meta Developer console test events)
+        if not text and isinstance(payload.get("value"), dict):
+            val = payload["value"]
+            sender_id = str(val.get("sender", {}).get("id") or sender_id)
+            msg_obj = val.get("message", {})
+            if isinstance(msg_obj, dict):
+                text = str(msg_obj.get("text") or "").strip()
+                metadata["mid"] = msg_obj.get("mid")
+            elif isinstance(msg_obj, str):
+                text = msg_obj.strip()
+
         if not text:
-            text = str(payload.get("message") or payload.get("text") or "").strip()
+            msg = payload.get("message")
+            if isinstance(msg, dict):
+                text = str(msg.get("text") or "").strip()
+            elif isinstance(msg, str):
+                text = msg.strip()
+            if not text:
+                text = str(payload.get("text") or "").strip()
+
         if sender_id == "unknown_meta" and payload.get("sender_id"):
             sender_id = str(payload.get("sender_id"))
 

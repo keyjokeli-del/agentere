@@ -34,7 +34,7 @@ async def dispatch_meta_graph_reply(recipient_id: str, reply_text: str, access_t
         print(f"[Meta Gateway] Simulación: Mensaje listo para {recipient_id} (META_ACCESS_TOKEN no configurado).")
         return {"status": "simulated", "recipient_id": recipient_id}
 
-    url = "https://graph.facebook.com/v19.0/me/messages"
+    url = "https://graph.facebook.com/v21.0/me/messages"
     payload = {
         "recipient": {"id": recipient_id},
         "message": {"text": reply_text},
@@ -52,6 +52,12 @@ async def dispatch_meta_graph_reply(recipient_id: str, reply_text: str, access_t
                 print(f"[Meta Gateway] Respuesta entregada a Meta Graph API para {recipient_id}.")
                 return resp.json()
             else:
+                # Fallback to Instagram Graph endpoint
+                ig_url = "https://graph.instagram.com/v21.0/me/messages"
+                resp_ig = await client.post(ig_url, json=payload, headers=headers)
+                if resp_ig.is_success:
+                    print(f"[Meta Gateway] Respuesta entregada a Instagram Graph API para {recipient_id}.")
+                    return resp_ig.json()
                 print(f"[Meta Gateway] Advertencia Graph API ({resp.status_code}): {resp.text}")
                 return {"status": "graph_api_error", "code": resp.status_code, "detail": resp.text}
     except Exception as e:
@@ -81,8 +87,8 @@ async def meta_webhook_event(
     raw_body = await request.body()
 
     # Verify cryptographic signature
-    if settings.meta_app_secret or os.getenv("INSTAGRAM_APP_SECRET"):
-        secrets = [s for s in [settings.meta_app_secret, os.getenv("INSTAGRAM_APP_SECRET")] if s]
+    if settings.meta_app_secret or settings.instagram_app_secret or os.getenv("INSTAGRAM_APP_SECRET"):
+        secrets = [s for s in [settings.meta_app_secret, settings.instagram_app_secret, os.getenv("INSTAGRAM_APP_SECRET")] if s]
         valid = any(verify_meta_signature(raw_body, x_hub_signature_256, sec) for sec in secrets)
         if not valid:
             print(f"[Meta Gateway] ❌ Firma X-Hub-Signature-256 inválida o adulterada ({x_hub_signature_256}).")
