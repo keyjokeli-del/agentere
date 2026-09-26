@@ -1073,42 +1073,68 @@ export default function Dashboard() {
                 </p>
               </div>
               <span className="text-xs font-mono font-bold text-cyan-bright bg-cyan-bright/10 px-3 py-1 rounded-xl border border-cyan-bright/30">
-                5 Activos • 1 Reel MP4
+                5 Activos • 2 Videos HD
               </span>
             </div>
 
-            {/* Video Showcase Card */}
-            <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-cyan-bright/35 shadow-2xl bg-sapphire-950/90 space-y-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            {/* Video Showcase Cards Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* 1:1 Reel Showcase Card */}
+              <div className="glass-panel rounded-3xl p-6 border border-cyan-bright/35 shadow-2xl bg-sapphire-950/90 space-y-4 flex flex-col justify-between">
                 <div>
-                  <span className="text-xs font-mono text-cyan-bright font-bold uppercase tracking-wider">
-                    ✦ Video Promocional Oficial
-                  </span>
-                  <h3 className="text-xl font-extrabold text-white mt-1">Lumina Promo Reel (1080x1080)</h3>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-mono text-cyan-bright font-bold uppercase tracking-wider">
+                      ✦ Reel Cuadrado (1:1)
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-lg bg-cyan-bright/10 border border-cyan-bright/30 text-[11px] font-mono text-cyan-bright font-bold">
+                      2.90 MB • Web & Feed
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-extrabold text-white mt-1">Lumina Promo Reel (1080x1080)</h3>
                   <p className="text-xs text-titanium-300 mt-1">
-                    Cámara Ken Burns 3D, disolvencias cruzadas, rotulación médica y transcodificación H.264 web streaming.
+                    Cámara Ken Burns 3D, disolvencias cruzadas, pista ambiental AAC y streaming web.
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="px-3 py-1 rounded-xl bg-white/5 border border-white/10 text-xs font-mono text-white">
-                    Tamaño: <strong>2.66 MB</strong> (&lt; 8 MB)
-                  </span>
-                  <span className="px-3 py-1 rounded-xl bg-cyan-bright/10 border border-cyan-bright/30 text-xs font-mono text-cyan-bright font-bold">
-                    30 FPS • H.264
-                  </span>
+
+                <div className="relative w-full aspect-square rounded-2xl overflow-hidden border border-cyan-bright/40 shadow-2xl bg-abyssal">
+                  <video
+                    src="/social-kit/lumina-promo-reel.mp4"
+                    poster="/social-kit/lumina-cover.png"
+                    controls
+                    loop
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
                 </div>
               </div>
 
-              {/* Video Player */}
-              <div className="relative w-full max-w-2xl mx-auto aspect-square rounded-2xl overflow-hidden border border-cyan-bright/40 shadow-2xl bg-abyssal">
-                <video
-                  src="/social-kit/lumina-promo-reel.mp4"
-                  poster="/social-kit/lumina-cover.png"
-                  controls
-                  loop
-                  playsInline
-                  className="w-full h-full object-cover"
-                />
+              {/* 9:16 Vertical Short Showcase Card */}
+              <div className="glass-panel rounded-3xl p-6 border border-teal-400/35 shadow-2xl bg-sapphire-950/90 space-y-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-mono text-teal-300 font-bold uppercase tracking-wider">
+                      ✦ Short / Reel Vertical (9:16)
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-lg bg-teal-400/10 border border-teal-400/30 text-[11px] font-mono text-teal-300 font-bold">
+                      3.70 MB • Shorts & Reels
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-extrabold text-white mt-1">Lumina Vertical Short (1080x1920)</h3>
+                  <p className="text-xs text-titanium-300 mt-1">
+                    Formato vertical cinematográfico para Instagram Reels, YouTube Shorts y Facebook Reels.
+                  </p>
+                </div>
+
+                <div className="relative w-full max-w-[280px] mx-auto aspect-[9/16] rounded-2xl overflow-hidden border border-teal-400/40 shadow-2xl bg-abyssal">
+                  <video
+                    src="/social-kit/lumina-short-9x16.mp4"
+                    poster="/social-kit/lumina-cover.png"
+                    controls
+                    loop
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                </div>
               </div>
             </div>
 
