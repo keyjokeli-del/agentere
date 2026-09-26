@@ -27,5 +27,9 @@ class ClinicSettings(BaseModel):
     meta_app_secret: str = os.getenv("META_APP_SECRET", "")
     youtube_api_key: str = os.getenv("YOUTUBE_API_KEY", "")
     youtube_channel_id: str = os.getenv("YOUTUBE_CHANNEL_ID", "")
+    # Database and Vector RAG Memory
+    database_url: str = os.getenv("DATABASE_URL") or os.getenv("NEON_DATABASE_URL") or ""
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
 
 settings = ClinicSettings()
+

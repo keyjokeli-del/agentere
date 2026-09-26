@@ -5,7 +5,9 @@ from datetime import datetime, date, timedelta, timezone
 from app.config import settings
 from app.services.groq_service import groq_service
 from app.services.calendar_service import calendar_service
+from app.services.rag_memory_service import rag_memory_service
 from app.models.dental_models import (
+
     ClinicCatalog,
     Treatment,
     GeneralFAQ,
@@ -44,6 +46,9 @@ except Exception as e:
 class ReaderAgent:
     """Agent 1: Ingests raw payloads from diverse social channels and maps to OmniChannelMessage."""
 
+    def __init__(self, memory_service=None) -> None:
+        self.memory = memory_service or rag_memory_service
+
     def read(self, payload: Any, channel: str = "web", default_sender: str = "unknown") -> OmniChannelMessage:
         if channel == "whatsapp":
             return self.from_whatsapp(payload if isinstance(payload, dict) else {"message": str(payload)})
@@ -60,12 +65,16 @@ class ReaderAgent:
         sender_id = str(payload.get("sender_id") or "unknown_wa").strip()
         text = str(payload.get("message") or payload.get("raw_text") or "").strip()
         sender_name = str(payload.get("sender_name") or sender_id).strip()
+        history = payload.get("recent_history")
+        if history is None:
+            history = self.memory.get_recent_turns("whatsapp", sender_id, limit=4)
         return OmniChannelMessage(
             channel="whatsapp",
             sender_id=sender_id,
             sender_name=sender_name or "Paciente",
             raw_text=text,
-            metadata=payload.get("metadata", {})
+            metadata=payload.get("metadata", {}),
+            recent_history=history
         )
 
     def from_meta(self, payload: Dict[str, Any], channel: str = "facebook") -> OmniChannelMessage:
@@ -94,12 +103,17 @@ class ReaderAgent:
             sender_id = str(payload.get("sender_id"))
 
         valid_channel = channel if channel in ("facebook", "instagram") else "facebook"
+        history = payload.get("recent_history")
+        if history is None:
+            history = self.memory.get_recent_turns(valid_channel, sender_id, limit=4)
+
         return OmniChannelMessage(
             channel=valid_channel,
             sender_id=sender_id,
             sender_name=str(payload.get("sender_name") or "Usuario Meta"),
             raw_text=text,
-            metadata=metadata
+            metadata=metadata,
+            recent_history=history
         )
 
     def from_youtube(self, payload: Dict[str, Any]) -> OmniChannelMessage:
@@ -133,12 +147,17 @@ class ReaderAgent:
             "parent_id": snippet.get("parentId") or payload.get("parent_id")
         }
 
+        history = payload.get("recent_history")
+        if history is None:
+            history = self.memory.get_recent_turns("youtube", sender_id, limit=4)
+
         return OmniChannelMessage(
             channel="youtube",
             sender_id=sender_id,
             sender_name=sender_name,
             raw_text=text,
-            metadata=metadata
+            metadata=metadata,
+            recent_history=history
         )
 
     def from_dict(self, payload: Dict[str, Any], channel: str = "web", default_sender: str = "unknown") -> OmniChannelMessage:
@@ -147,23 +166,32 @@ class ReaderAgent:
         sender_name = str(payload.get("sender_name") or "Paciente").strip()
         ch = str(payload.get("channel") or channel).lower()
         valid_ch = ch if ch in ("whatsapp", "facebook", "instagram", "youtube", "web") else "web"
+        history = payload.get("recent_history")
+        if history is None:
+            history = self.memory.get_recent_turns(valid_ch, sender_id, limit=4)
         return OmniChannelMessage(
             channel=valid_ch,
             sender_id=sender_id,
             sender_name=sender_name,
             raw_text=raw_text,
-            metadata=payload.get("metadata", {})
+            metadata=payload.get("metadata", {}),
+            recent_history=history
         )
 
-    def from_text(self, text: str, channel: str = "web", sender_id: str = "user-web", sender_name: str = "Paciente") -> OmniChannelMessage:
+    def from_text(self, text: str, channel: str = "web", sender_id: str = "user-web", sender_name: str = "Paciente", recent_history: Optional[List[Dict[str, str]]] = None) -> OmniChannelMessage:
         valid_ch = channel if channel in ("whatsapp", "facebook", "instagram", "youtube", "web") else "web"
+        history = recent_history
+        if history is None:
+            history = self.memory.get_recent_turns(valid_ch, sender_id, limit=4)
         return OmniChannelMessage(
             channel=valid_ch,
             sender_id=sender_id,
             sender_name=sender_name,
             raw_text=text.strip(),
-            metadata={}
+            metadata={},
+            recent_history=history
         )
+
 
 
 # ==============================================================================
@@ -188,12 +216,32 @@ Tu misión es analizar el mensaje del paciente y devolver EXCLUSIVAMENTE un JSON
 No incluyas texto fuera del JSON.
 """
 
+    def __init__(self, memory_service=None) -> None:
+        self.memory = memory_service or rag_memory_service
+
     def analyze(self, message: OmniChannelMessage, context: List[Dict[str, str]]) -> ClinicalAnalysis:
         raw_text = message.raw_text
-        prompt = self.SYSTEM_PROMPT.format(clinic_name=settings.clinic_name)
+
+        # 1. RAG Vectorial: Retrieve top 3 clinical knowledge chunks via cosine distance
+        rag_chunks = self.memory.search_clinical_knowledge(raw_text, top_k=3)
+        rag_knowledge_context = [c["content"] for c in rag_chunks] if rag_chunks else []
+
+        # 2. RAG Vectorial: Retrieve patient's long-term memory
+        patient_mems = self.memory.search_patient_memories(message.sender_id, raw_text, top_k=3)
+        patient_memory_context = [m["memory_text"] for m in patient_mems] if patient_mems else []
+
+        effective_context = context if context else message.recent_history
+
+        rag_prompt_section = ""
+        if rag_knowledge_context:
+            rag_prompt_section += "\n\nCONOCIMIENTO CLÍNICO RAG DISPONIBLE:\n" + "\n".join(f"- {c}" for c in rag_knowledge_context)
+        if patient_memory_context:
+            rag_prompt_section += "\n\nMEMORIA PREVIA DEL PACIENTE:\n" + "\n".join(f"- {m}" for m in patient_memory_context)
+
+        prompt = self.SYSTEM_PROMPT.format(clinic_name=settings.clinic_name) + rag_prompt_section
         messages = [
             {"role": "system", "content": prompt},
-            *context[-4:],
+            *effective_context[-4:],
             {"role": "user", "content": f"Mensaje [{message.channel.upper()}] de {message.sender_name}: '{raw_text}'"}
         ]
 
@@ -201,6 +249,8 @@ No incluyas texto fuera del JSON.
 
         try:
             parsed = json.loads(response_text)
+            parsed["rag_knowledge_context"] = rag_knowledge_context
+            parsed["patient_memory_context"] = patient_memory_context
             return ClinicalAnalysis.model_validate(parsed)
         except Exception:
             # Deterministic rule-based fallback
@@ -214,7 +264,9 @@ No incluyas texto fuera del JSON.
                     extracted_treatment="Urgencia Dental",
                     extracted_date=None,
                     extracted_time=None,
-                    summary="El paciente reporta dolor o urgencia médica."
+                    summary="El paciente reporta dolor o urgencia médica.",
+                    rag_knowledge_context=rag_knowledge_context,
+                    patient_memory_context=patient_memory_context
                 )
             elif any(w in msg_lower for w in ["cita", "turno", "agend", "reserv", "hora"]):
                 return ClinicalAnalysis(
@@ -225,7 +277,9 @@ No incluyas texto fuera del JSON.
                     extracted_treatment=None,
                     extracted_date=None,
                     extracted_time=None,
-                    summary="Solicitud para agendar un turno."
+                    summary="Solicitud para agendar un turno.",
+                    rag_knowledge_context=rag_knowledge_context,
+                    patient_memory_context=patient_memory_context
                 )
             elif any(w in msg_lower for w in ["precio", "cuanto", "sale", "cuesta", "costo", "valor"]):
                 return ClinicalAnalysis(
@@ -236,7 +290,9 @@ No incluyas texto fuera del JSON.
                     extracted_treatment=None,
                     extracted_date=None,
                     extracted_time=None,
-                    summary="Consulta sobre costos o procedimientos."
+                    summary="Consulta sobre costos o procedimientos.",
+                    rag_knowledge_context=rag_knowledge_context,
+                    patient_memory_context=patient_memory_context
                 )
             elif any(w in msg_lower for w in ["hola", "buen", "saludos", "buenas"]):
                 return ClinicalAnalysis(
@@ -247,7 +303,9 @@ No incluyas texto fuera del JSON.
                     extracted_treatment=None,
                     extracted_date=None,
                     extracted_time=None,
-                    summary="Saludo inicial del paciente."
+                    summary="Saludo inicial del paciente.",
+                    rag_knowledge_context=rag_knowledge_context,
+                    patient_memory_context=patient_memory_context
                 )
             return ClinicalAnalysis(
                 intent="GENERAL_FAQ",
@@ -257,16 +315,19 @@ No incluyas texto fuera del JSON.
                 extracted_treatment=None,
                 extracted_date=None,
                 extracted_time=None,
-                summary="Consulta general o institucional."
+                summary="Consulta general o institucional.",
+                rag_knowledge_context=rag_knowledge_context,
+                patient_memory_context=patient_memory_context
             )
 
 
 # Backward-compatible TriageAgent
 class TriageAgent:
     """Legacy wrapper delegating to AnalyzerAgent."""
-    def __init__(self) -> None:
-        self.reader = ReaderAgent()
-        self.analyzer = AnalyzerAgent()
+    def __init__(self, memory_service=None) -> None:
+        self.memory = memory_service or rag_memory_service
+        self.reader = ReaderAgent(memory_service=self.memory)
+        self.analyzer = AnalyzerAgent(memory_service=self.memory)
 
     def process(self, message: str, context: List[Dict[str, str]]) -> TriageResult:
         omni_msg = self.reader.from_text(message)
@@ -288,7 +349,14 @@ class DentalFAQAgent:
     def __init__(self) -> None:
         self.kb_context = json.dumps(CLINIC_CATALOG.model_dump(), ensure_ascii=False, indent=2)
 
-    def generate_response(self, user_message: str, triage_data: TriageResult, context: List[Dict[str, str]]) -> str:
+    def generate_response(
+        self,
+        user_message: str,
+        triage_data: TriageResult,
+        context: List[Dict[str, str]],
+        rag_knowledge: Optional[List[str]] = None,
+        patient_memories: Optional[List[str]] = None
+    ) -> str:
         # Check for medication or prescription inquiry
         msg_lower = user_message.lower()
         if any(w in msg_lower for w in ["receta", "medicamento", "pastilla", "amoxicilina", "ibuprofeno", "que tomo", "qué puedo tomar"]):
@@ -299,13 +367,19 @@ class DentalFAQAgent:
                 f"{settings.clinic_address} o indicarnos si deseas un turno de urgencia hoy mismo."
             )
 
+        rag_section = ""
+        if rag_knowledge:
+            rag_section += "\n\nCONOCIMIENTO CLÍNICO RAG RELEVANTE (Neon pgvector):\n" + "\n---\n".join(rag_knowledge)
+        if patient_memories:
+            rag_section += "\n\nANTECEDENTES DEL PACIENTE:\n" + "\n---\n".join(patient_memories)
+
         system_prompt = f"""Eres el Asistente Clínico Odontológico de {settings.clinic_name}.
 Ubicación: {settings.clinic_address}
 Teléfono: {settings.clinic_phone}
 Horario de Atención: {settings.business_hours_start}:00 a {settings.business_hours_end}:00
 
 BASE DE CONOCIMIENTO DE TRATAMIENTOS Y PRECIOS:
-{self.kb_context}
+{self.kb_context}{rag_section}
 
 DIRECTRICES CRÍTICAS:
 1. Responde de forma empática, clara, concisa y profesional.
@@ -384,9 +458,10 @@ class AppointmentAgent:
 class SolverAgent:
     """Agent 3: Formulates the final empathetic solution based on diagnosis and channel."""
 
-    def __init__(self) -> None:
+    def __init__(self, memory_service=None) -> None:
         self.faq_agent = DentalFAQAgent()
         self.appointment_agent = AppointmentAgent()
+        self.memory = memory_service or rag_memory_service
 
     def solve(
         self,
@@ -409,6 +484,9 @@ class SolverAgent:
             summary=analysis.summary
         )
 
+        rag_knowledge = analysis.rag_knowledge_context
+        patient_memories = analysis.patient_memory_context
+
         action_taken = "responded"
         responding_agent_name = "SolverAgent"
 
@@ -417,17 +495,42 @@ class SolverAgent:
             action_taken = "calendar_booked" if "confirmada con éxito" in reply_text else "slots_proposed"
             responding_agent_name = "SolverAgent (Calendar)"
         elif intent == "EMERGENCY_OR_PAIN":
-            reply_text = self.faq_agent.generate_response(user_text, triage_bridge, context)
+            reply_text = self.faq_agent.generate_response(user_text, triage_bridge, context, rag_knowledge=rag_knowledge, patient_memories=patient_memories)
             action_taken = "emergency_diverted"
             responding_agent_name = "SolverAgent (Emergency)"
         elif intent in ("INQUIRE_PRICE_OR_TREATMENT", "GENERAL_FAQ"):
-            reply_text = self.faq_agent.generate_response(user_text, triage_bridge, context)
+            reply_text = self.faq_agent.generate_response(user_text, triage_bridge, context, rag_knowledge=rag_knowledge, patient_memories=patient_memories)
             action_taken = "faq_answered"
             responding_agent_name = "SolverAgent (Clinical Catalog)"
         else:  # GREETING
-            reply_text = self.faq_agent.generate_response(user_text, triage_bridge, context)
+            reply_text = self.faq_agent.generate_response(user_text, triage_bridge, context, rag_knowledge=rag_knowledge, patient_memories=patient_memories)
             action_taken = "greeting_provided"
             responding_agent_name = "SolverAgent (Welcome)"
+
+        # 1. Log conversation turns in RAG short-term memory
+        self.memory.add_turn(channel=channel, sender_id=sender_id, role="user", content=user_text)
+        self.memory.add_turn(channel=channel, sender_id=sender_id, role="assistant", content=reply_text)
+
+        # 2. Extract and vectorize long-term patient memories
+        patient_name = analysis.extracted_name or (message.sender_name if message.sender_name not in ("Paciente", "unknown") else None)
+        if analysis.extracted_treatment:
+            self.memory.add_patient_memory(
+                sender_id=sender_id,
+                patient_name=patient_name,
+                memory_text=f"Interés en tratamiento: {analysis.extracted_treatment}"
+            )
+        if analysis.urgency == "high":
+            self.memory.add_patient_memory(
+                sender_id=sender_id,
+                patient_name=patient_name,
+                memory_text=f"Reportó dolor o urgencia dental: {analysis.detected_problem}"
+            )
+        if analysis.intent == "BOOK_APPOINTMENT" and (analysis.extracted_date or analysis.extracted_time):
+            self.memory.add_patient_memory(
+                sender_id=sender_id,
+                patient_name=patient_name,
+                memory_text=f"Agendó o consultó turno para {analysis.extracted_date or 'fecha próxima'} {analysis.extracted_time or ''}".strip()
+            )
 
         return SolverResponse(
             reply=reply_text,
@@ -447,12 +550,14 @@ class SolverAgent:
 class OmniChannelPipeline:
     """Centralized orchestrator running the sequential 3-agent critical pipeline:
     ReaderAgent -> AnalyzerAgent -> SolverAgent
+    with Hybrid Memory and Neon Vector RAG.
     """
 
-    def __init__(self) -> None:
-        self.reader = ReaderAgent()
-        self.analyzer = AnalyzerAgent()
-        self.solver = SolverAgent()
+    def __init__(self, memory_service=None) -> None:
+        self.memory = memory_service or rag_memory_service
+        self.reader = ReaderAgent(memory_service=self.memory)
+        self.analyzer = AnalyzerAgent(memory_service=self.memory)
+        self.solver = SolverAgent(memory_service=self.memory)
         self.sessions: Dict[str, List[Dict[str, str]]] = {}
 
     def get_or_create_session(self, session_id: str) -> List[Dict[str, str]]:
@@ -464,13 +569,19 @@ class OmniChannelPipeline:
         session_id = f"{message.channel}:{message.sender_id}"
         history = self.get_or_create_session(session_id)
 
-        # 1. AnalyzerAgent
-        analysis = self.analyzer.analyze(message, history)
+        # Ingest short-term memory if empty
+        if not message.recent_history:
+            message.recent_history = self.memory.get_recent_turns(message.channel, message.sender_id, limit=4)
 
-        # 2. SolverAgent
-        solution = self.solver.solve(message, analysis, history)
+        combined_history = history if history else message.recent_history
 
-        # 3. Update session history
+        # 1. AnalyzerAgent (with RAG retrieval)
+        analysis = self.analyzer.analyze(message, combined_history)
+
+        # 2. SolverAgent (solves, logs turns, extracts patient memory)
+        solution = self.solver.solve(message, analysis, combined_history)
+
+        # 3. Update session cache
         history.append({"role": "user", "content": message.raw_text})
         history.append({"role": "assistant", "content": solution.reply})
 
@@ -510,3 +621,4 @@ class OmniChannelPipeline:
 pipeline = OmniChannelPipeline()
 coordinator = pipeline
 DentalAgentCoordinator = OmniChannelPipeline
+

@@ -43,7 +43,10 @@ class GroqService:
                 kwargs["response_format"] = response_format
 
             chat_completion = self.client.chat.completions.create(**kwargs)
-            return chat_completion.choices[0].message.content or ""
+            content = chat_completion.choices[0].message.content or ""
+            if not content.strip():
+                return self._fallback_response(messages)
+            return content
         except Exception as e:
             err_msg = str(e).lower()
             if "rate_limit" in err_msg or "429" in err_msg:
@@ -51,6 +54,7 @@ class GroqService:
             else:
                 print(f"[GroqService] Error en inferencia Groq ({e}). Conmutando a fallback determinista.")
             return self._fallback_response(messages)
+
 
     def _fallback_response(self, messages: List[Dict[str, str]]) -> str:
         """Deterministic rule-based response adhering strictly to Pydantic schemas."""
@@ -130,6 +134,14 @@ class GroqService:
                 f"medicamentos sin una valoración física previa en el consultorio. "
                 f"Si presentas dolor agudo, te invitamos a acudir hoy a {settings.clinic_address}."
             )
+
+        if any(w in msg_lower for w in ["duel", "dol", "muela", "urgencia", "emergencia", "sangr", "inflam", "hinch"]):
+            return (
+                f"⚠️ En {settings.clinic_name} atendemos urgencias dentales y dolor agudo de manera prioritaria con valoración presencial en el día en {settings.clinic_address}. "
+                f"Por normativas médicas y éticas no podemos recetar medicamentos sin una evaluación clínica presencial previa. "
+                f"¿Deseas acudir de inmediato a la clínica o que te reservemos un turno prioritario?"
+            )
+
 
         if any(w in msg_lower for w in ["precio", "cuanto", "sale", "cuesta"]):
             return (

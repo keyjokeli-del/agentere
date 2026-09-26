@@ -8,6 +8,7 @@ class OmniChannelMessage(BaseModel):
     sender_name: str = Field("Paciente", description="Nombre o apodo visible del paciente")
     raw_text: str = Field(..., description="Texto limpio extraído del mensaje")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Metadatos contextuales (post_id, comment_id, message_id, etc.)")
+    recent_history: List[Dict[str, str]] = Field(default_factory=list, description="Historial reciente de la conversación (últimos turnos)")
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat(), description="Marca temporal ISO en UTC")
 
 class ClinicalAnalysis(BaseModel):
@@ -25,6 +26,9 @@ class ClinicalAnalysis(BaseModel):
     extracted_date: Optional[str] = Field(None, description="Fecha solicitada")
     extracted_time: Optional[str] = Field(None, description="Hora solicitada")
     summary: str = Field(..., description="Resumen estructurado")
+    rag_knowledge_context: List[str] = Field(default_factory=list, description="Fragmentos de conocimiento clínico recuperados vía RAG")
+    patient_memory_context: List[str] = Field(default_factory=list, description="Memorias a largo plazo del paciente recuperadas vía RAG")
+
 
 class SolverResponse(BaseModel):
     reply: str = Field(..., description="Respuesta empática final redactada para el paciente")
