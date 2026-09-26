@@ -1,3 +1,4 @@
+import os
 import hmac
 import hashlib
 import json
@@ -80,10 +81,13 @@ async def meta_webhook_event(
     raw_body = await request.body()
 
     # Verify cryptographic signature
-    if settings.meta_app_secret:
-        if not verify_meta_signature(raw_body, x_hub_signature_256, settings.meta_app_secret):
-            print("[Meta Gateway] ❌ Firma X-Hub-Signature-256 inválida o adulterada.")
+    if settings.meta_app_secret or os.getenv("INSTAGRAM_APP_SECRET"):
+        secrets = [s for s in [settings.meta_app_secret, os.getenv("INSTAGRAM_APP_SECRET")] if s]
+        valid = any(verify_meta_signature(raw_body, x_hub_signature_256, sec) for sec in secrets)
+        if not valid:
+            print(f"[Meta Gateway] ❌ Firma X-Hub-Signature-256 inválida o adulterada ({x_hub_signature_256}).")
             raise HTTPException(status_code=403, detail="Invalid X-Hub-Signature-256 signature")
+        print("[Meta Gateway] ✅ Firma HMAC-SHA256 verificada exitosamente.")
     else:
         print("[Meta Gateway] Aviso: META_APP_SECRET no configurado, omitiendo validación estricta de firma.")
 
