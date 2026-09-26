@@ -29,6 +29,9 @@ class SolverMemory:
         if key not in self.db.in_memory_turns:
             self.db.in_memory_turns[key] = []
         self.db.in_memory_turns[key].append({"role": role, "content": content})
+        # Auto-prune in-memory store to keep only the last 4 turns
+        if len(self.db.in_memory_turns[key]) > 4:
+            self.db.in_memory_turns[key] = self.db.in_memory_turns[key][-4:]
 
         conn = self.db.get_connection()
         if not conn:
@@ -37,12 +40,29 @@ class SolverMemory:
         try:
             with conn:
                 with conn.cursor() as cur:
+                    # 1. Insert latest turn
                     cur.execute(
                         """
                         INSERT INTO conversation_turns (channel, sender_id, role, content)
                         VALUES (%s, %s, %s, %s);
                         """,
-                        (channel, sender_id, role, content)
+                        (channel, target_sender, role, content)
+                    )
+                    # 2. Auto-prune turns exceeding the last 4 messages for this user/channel
+                    cur.execute(
+                        """
+                        DELETE FROM conversation_turns
+                        WHERE channel = %s AND sender_id = %s
+                          AND id NOT IN (
+                              SELECT id FROM (
+                                  SELECT id FROM conversation_turns
+                                  WHERE channel = %s AND sender_id = %s
+                                  ORDER BY created_at DESC, id DESC
+                                  LIMIT 4
+                              ) AS recent_ids
+                          );
+                        """,
+                        (channel, target_sender, channel, target_sender)
                     )
         except Exception:
             pass

@@ -1,4 +1,5 @@
-__pycache__
+__pycache__/
+*.py[cod]
 *.pyc
 *.pyo
 *.pyd
@@ -8,6 +9,14 @@ venv/
 .venv/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+auth_info_baileys/
+*.log
+*.tmp
+*.bak
+.next/
 .git
 .gitignore
 .env

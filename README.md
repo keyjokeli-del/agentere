@@ -89,8 +89,9 @@ agentere/
 │   │   │   │   └── agent.py       # SolverAgent, DentalFAQAgent y AppointmentAgent
 │   │   │   ├── orchestrator.py    # OmniChannelPipeline, DentalAgentCoordinator y TriageAgent
 │   │   │   └── __init__.py        # Re-exportaciones públicas limpias
-│   │   ├── core/                  # Infraestructura compartida de base de datos
-│   │   │   └── database.py        # DatabaseManager: conexión a Neon Postgres, DDL y seeding
+│   │   ├── core/                  # Infraestructura compartida de base de datos y memoria
+│   │   │   ├── database.py        # DatabaseManager: conexión a Neon Postgres, DDL y seeding
+│   │   │   └── cleanup.py         # RuntimeCleanupManager: autolimpieza de /tmp, poda LRU y gc.collect()
 │   │   ├── services/
 │   │   │   ├── embedding_service.py # Generador de embeddings (Gemini 768 / fallback determinista)
 │   │   │   ├── groq_service.py    # Cliente Groq Cloud con fallback por rate-limit
@@ -104,7 +105,7 @@ agentere/
 │   │   │   └── clinic_info.json   # Catálogo clínico de tratamientos y precios
 │   │   ├── config.py              # Validación de configuración y entornos
 │   │   └── main.py                # Servidor FastAPI, endpoints REST y webhooks
-│   ├── tests/                     # Suite completa de 30 tests unitarios, RAG y E2E
+│   ├── tests/                     # Suite completa de 34 tests unitarios, RAG, E2E y autolimpieza
 │   ├── Dockerfile                 # Multi-stage ultra-liviano (Python 3.11-slim, < 150MB RAM)
 │   ├── .dockerignore
 │   └── requirements.txt           # Dependencias de producción fijadas

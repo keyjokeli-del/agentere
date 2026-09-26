@@ -9,6 +9,7 @@ from app.config import settings
 from app.agents import coordinator, pipeline
 from app.services.calendar_service import calendar_service
 from app.core.database import db_manager
+from app.core.cleanup import cleanup_manager, run_runtime_cleanup
 from app.models.dental_models import AppointmentRecord, AppointmentCreateRequest, SlotsResponse
 from app.social_gateways.meta import router as meta_router
 from app.social_gateways.youtube import router as youtube_router
@@ -49,12 +50,23 @@ class CreateAppointmentRequest(BaseModel):
     time: str  # HH:MM
     channel: str = "manual"
 
+@app.middleware("http")
+async def runtime_cleanup_middleware(request: Request, call_next):
+    response = await call_next(request)
+    # Throttled cleanup to preserve memory below 512MB
+    cleanup_manager.perform_cleanup(force=False)
+    return response
+
 @app.on_event("startup")
 def on_startup():
     try:
         db_manager.seed_clinical_knowledge()
     except Exception as e:
         print(f"[Main Startup] Notice: Database knowledge seed warning: {e}")
+    try:
+        cleanup_manager.perform_cleanup(force=True)
+    except Exception as e:
+        print(f"[Main Startup] Notice: Initial cleanup warning: {e}")
 
 @app.get("/")
 def health_check():
@@ -179,3 +191,10 @@ def dashboard_summary():
             "youtube": {"active": True, "provider": "YouTube Data API v3 (Google Free Quota)"}
         }
     }
+
+
+@app.post("/api/admin/cleanup")
+def trigger_admin_cleanup():
+    """Manual cleanup trigger to prune in-memory caches, purge temp files, and run gc.collect()."""
+    return cleanup_manager.perform_cleanup(force=True)
+

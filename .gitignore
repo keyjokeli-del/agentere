@@ -3,26 +3,39 @@ node_modules/
 frontend/node_modules/
 whatsapp-service/node_modules/
 venv/
+.venv/
 
 # Next.js build
 .next/
 frontend/.next/
 out/
 
-# Python
+# Python Cache & Bytecode
 __pycache__/
+*.py[cod]
+*$py.class
 *.pyc
+*.pyo
+*.pyd
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Environment & Secrets
 .env
 .env.local
+.env.*.local
 auth_info_baileys/
 whatsapp-service/auth_info_baileys/
 credentials.json
 backend/credentials.json
 *.json.key
 
-# Logs
+# Logs, Temp Files & OS Artifacts
 *.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db

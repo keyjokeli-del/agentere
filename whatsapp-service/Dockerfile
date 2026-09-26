@@ -6,7 +6,7 @@ FROM node:20-alpine AS builder
 WORKDIR /build
 
 COPY package*.json ./
-RUN npm ci --omit=dev --no-audit --no-fund
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
 # ==============================================================================
 # STAGE 2: RAM-Optimized Production Runtime (Baileys + Neon DB)

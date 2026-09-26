@@ -5,9 +5,10 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /build
 
-# Avoid writing .pyc files and enable unbuffered output
+# Avoid writing .pyc files, disable pip cache and enable unbuffered output
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
 # Install build dependencies if needed, create lightweight venv
 RUN apt-get update && apt-get install -y --no-install-recommends \
