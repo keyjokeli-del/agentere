@@ -6,8 +6,8 @@ import { Calendar, Clock, MessageCircle, Sparkles, CheckCircle2, ArrowRight, Ste
 const POPULAR_TREATMENTS = [
   'Consulta Odontológica General',
   'Blanqueamiento Dental Láser',
-  'Implantes Guiados 3D',
-  'Triage de Urgencias 24/7',
+  'Implantes de Titanio y Zafiro 3D',
+  'Guardia de Urgencias Odontológicas 24/7',
   'Limpieza y Profilaxis Ultrasónica'
 ];
 
