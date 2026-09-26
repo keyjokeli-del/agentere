@@ -45,6 +45,18 @@ services:
         value: "19"
       - key: SLOT_DURATION_MINUTES
         value: "45"
+      - key: META_ACCESS_TOKEN
+        sync: false
+      - key: META_VERIFY_TOKEN
+        value: "lumina_agent_token_2026"
+      - key: INSTAGRAM_PAGE_ID
+        value: "17841425893709242"
+      - key: FACEBOOK_PAGE_ID
+        value: "61595032550499"
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: YOUTUBE_CHANNEL_ID
+        value: "UCd-Jfy2X6R7TOMy8lpmHaMg"
 
   # ----------------------------------------------------------------------------
   # 2. Microservicio de WhatsApp: Baileys + Neon Postgres

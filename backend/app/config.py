@@ -25,6 +25,8 @@ class ClinicSettings(BaseModel):
     meta_verify_token: str = os.getenv("META_VERIFY_TOKEN", "lumina_agent_token_2026")
     meta_access_token: str = os.getenv("META_ACCESS_TOKEN", "")
     meta_app_secret: str = os.getenv("META_APP_SECRET", "")
+    instagram_page_id: str = os.getenv("INSTAGRAM_PAGE_ID", "")
+    facebook_page_id: str = os.getenv("FACEBOOK_PAGE_ID", "")
     youtube_api_key: str = os.getenv("YOUTUBE_API_KEY", "")
     youtube_channel_id: str = os.getenv("YOUTUBE_CHANNEL_ID", "")
     # Database and Vector RAG Memory
