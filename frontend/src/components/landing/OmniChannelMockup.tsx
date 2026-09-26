@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Smartphone, CheckCircle2, Sparkles, Send, Play, Film } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Smartphone, CheckCircle2, Sparkles, Send, Play, Pause, Volume2, VolumeX, Film } from 'lucide-react';
 
 const FacebookIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="currentColor" viewBox="0 0 24 24">
@@ -17,6 +17,28 @@ const InstagramIcon = ({ className }: { className?: string }) => (
 
 export default function OmniChannelMockup() {
   const [activeTab, setActiveTab] = useState<'whatsapp' | 'instagram' | 'meta'>('whatsapp');
+  const [isPlaying, setIsPlaying] = useState<boolean>(true);
+  const [isMuted, setIsMuted] = useState<boolean>(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const togglePlay = () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        videoRef.current.play();
+        setIsPlaying(true);
+      }
+    }
+  };
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
+    }
+  };
 
   const channelInfo = {
     whatsapp: {
@@ -31,14 +53,14 @@ export default function OmniChannelMockup() {
       patientColor: 'text-pink-400',
       patientIcon: InstagramIcon,
       patientMsg: 'Buenas tardes! Vi su reel de blanqueamiento láser, ¿cuál es el precio y cuánto dura la sesión?',
-      botMsg: '¡Hola! El tratamiento se completa en 1 sesión de 45 minutos. El costo incluye profilaxis previa. ¿Te gustaría agendar una evaluación para este viernes a las 15:00 hs?',
+      botMsg: '¡Hola! El tratamiento se completa en 1 sesión de 45 minutos ($90 a $150 USD). El costo incluye profilaxis previa. ¿Te gustaría agendar una evaluación para este viernes a las 15:00 hs?',
     },
     meta: {
       patientChannel: 'Facebook Messenger',
       patientColor: 'text-blue-400',
       patientIcon: FacebookIcon,
       patientMsg: 'Hola, quisiera consultar si realizan implantes guiados en 3D para una rehabilitación completa.',
-      botMsg: '¡Hola! Sí, contamos con tomografía digital y cirugía guiada por ordenador de máxima precisión. Tenemos disponibilidad diagnóstica el lunes a las 10:30 hs.',
+      botMsg: '¡Hola! Sí, contamos con tomografía digital y cirugía guiada por ordenador en titanio y zafiro ($350 a $600 USD). Tenemos disponibilidad diagnóstica el lunes a las 10:30 hs.',
     }
   };
 
@@ -116,6 +138,7 @@ export default function OmniChannelMockup() {
           {/* Video Reel Showcase */}
           <div className="relative w-full aspect-video min-h-[360px] md:min-h-[480px] bg-abyssal flex items-center justify-center overflow-hidden">
             <video
+              ref={videoRef}
               src="/social-kit/lumina-promo-reel.mp4"
               poster="/social-kit/lumina-cover.png"
               autoPlay
@@ -129,11 +152,35 @@ export default function OmniChannelMockup() {
             <div className="absolute inset-0 bg-gradient-to-b from-cyan-bright/5 via-transparent to-abyssal/80 pointer-events-none" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_40%,rgba(5,19,32,0.6)_100%)] pointer-events-none" />
             
-            {/* Top Video Header Tag */}
-            <div className="absolute top-4 left-4 sm:top-6 sm:left-6 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-sapphire-950/80 border border-cyan-bright/30 backdrop-blur-md text-xs font-semibold text-white pointer-events-none">
-              <Film className="w-3.5 h-3.5 text-cyan-bright" />
-              <span>Lumina Cinematic Reel • 1080p</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-1" />
+            {/* Top Video Header Tag & Interactive Controls */}
+            <div className="absolute top-4 left-4 right-4 sm:top-6 sm:left-6 sm:right-6 flex items-center justify-between pointer-events-auto">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-sapphire-950/85 border border-cyan-bright/30 backdrop-blur-md text-xs font-semibold text-white">
+                <Film className="w-3.5 h-3.5 text-cyan-bright" />
+                <span>Lumina Cinematic Reel • 1080p</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-1" />
+              </div>
+
+              {/* Optional playback controls */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  className="p-2 rounded-xl bg-sapphire-950/85 border border-cyan-bright/30 text-white hover:text-cyan-bright backdrop-blur-md transition cursor-pointer"
+                  title={isPlaying ? 'Pausar video' : 'Reproducir video'}
+                  aria-label="Reproducir o pausar video"
+                >
+                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleMute}
+                  className="p-2 rounded-xl bg-sapphire-950/85 border border-cyan-bright/30 text-white hover:text-cyan-bright backdrop-blur-md transition cursor-pointer"
+                  title={isMuted ? 'Activar audio ambiental' : 'Silenciar audio'}
+                  aria-label="Silenciar o activar audio"
+                >
+                  {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -141,7 +188,7 @@ export default function OmniChannelMockup() {
           <div className="absolute inset-0 p-4 sm:p-8 md:p-10 flex flex-col justify-between pointer-events-none">
             
             {/* Top Left Floating Chat: Patient Message */}
-            <div className="self-start max-w-xs sm:max-w-sm rounded-2xl p-4 bg-sapphire-950/90 border border-white/20 backdrop-blur-xl shadow-2xl space-y-1.5 animate-float gpu-layer pointer-events-auto">
+            <div className="self-start max-w-xs sm:max-w-sm rounded-2xl p-4 bg-sapphire-950/90 border border-white/20 backdrop-blur-xl shadow-2xl space-y-1.5 animate-float gpu-layer pointer-events-auto mt-12 sm:mt-14">
               <div className="flex items-center justify-between text-[11px] text-titanium-400 font-semibold">
                 <span className={`flex items-center gap-1.5 ${current.patientColor}`}>
                   <CurrentIcon className="w-3.5 h-3.5" /> {current.patientChannel}

@@ -31,6 +31,10 @@ body {
   .glass-input {
     @apply bg-sapphire-950/70 border border-white/15 focus:border-cyan-bright/60 focus:ring-1 focus:ring-cyan-bright text-white placeholder-titanium-400 outline-none;
   }
+  .fiber-optic-border {
+    border: 1px solid rgba(0, 229, 255, 0.4);
+    box-shadow: 0 0 15px rgba(0, 229, 255, 0.3), inset 0 0 10px rgba(0, 229, 255, 0.15);
+  }
 
   /* GPU Compositing Layer Isolation to eliminate paint thrashing */
   .gpu-layer {

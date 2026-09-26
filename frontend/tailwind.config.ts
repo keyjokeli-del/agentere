@@ -1,5 +1,6 @@
-/** @type {import('tailwindcss').Config} */
-module.exports = {
+import type { Config } from 'tailwindcss';
+
+const config: Config = {
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -11,13 +12,13 @@ module.exports = {
         abyssal: {
           DEFAULT: '#051320',
           900: '#051320',
-          950: '#030d17',
+          950: '#020f1c',
         },
         sapphire: {
           800: '#144c6b',
           900: '#0F3D56',
           950: '#0B2B44',
-          990: '#071d2e',
+          990: '#061421',
         },
         cyan: {
           bright: '#00E5FF',
@@ -43,11 +44,17 @@ module.exports = {
           900: '#134e4a',
         },
       },
+      backgroundImage: {
+        'radial-gradient': 'radial-gradient(var(--tw-gradient-stops))',
+        'radial-ambient': 'radial-gradient(circle at 50% -20%, rgba(15, 61, 86, 0.45), rgba(5, 19, 32, 1))',
+        'cyan-flare': 'radial-gradient(circle at center, rgba(0, 229, 255, 0.25) 0%, transparent 70%)',
+      },
       boxShadow: {
         'cyan-glow': '0 0 35px -5px rgba(0, 229, 255, 0.35)',
-        'cyan-glow-lg': '0 0 55px -5px rgba(0, 229, 255, 0.45)',
+        'cyan-glow-lg': '0 0 55px -5px rgba(0, 229, 255, 0.50)',
         'glass-card': '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
-        'glass-hover': '0 12px 40px 0 rgba(0, 229, 255, 0.15)',
+        'glass-hover': '0 12px 40px 0 rgba(0, 229, 255, 0.20)',
+        'fiber-optic': '0 0 15px rgba(0, 229, 255, 0.4), inset 0 0 15px rgba(0, 229, 255, 0.2)',
       },
       animation: {
         'float': 'float 5s ease-in-out infinite',
@@ -66,4 +73,6 @@ module.exports = {
     },
   },
   plugins: [],
-}
+};
+
+export default config;

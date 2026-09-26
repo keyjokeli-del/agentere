@@ -2,13 +2,14 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { Calendar, ArrowRight, Zap, Shield, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Calendar, ArrowRight, Zap, Shield, Sparkles, CheckCircle2, Tag } from 'lucide-react';
 
 const TREATMENTS_DATA = [
   {
     id: 'blanqueamiento-laser',
     title: 'Blanqueamiento Dental Láser',
     category: 'Estética Dental',
+    price: '$90 a $150 USD',
     subtitle: 'Fotoactivación en Frío de Alta Precisión',
     description: 'Elimina manchas severas de café y tabaco en una sola sesión clínica de 45 minutos. Fórmula protectora que previene la sensibilidad gingival.',
     image: '/social-kit/ig-post-blanqueamiento.png',
@@ -18,19 +19,21 @@ const TREATMENTS_DATA = [
   },
   {
     id: 'implantes-guiados-3d',
-    title: 'Implantes Guiados 3D',
+    title: 'Implantes de Titanio y Zafiro 3D',
     category: 'Implantología Digital',
+    price: '$350 a $600 USD',
     subtitle: 'Planificación Tomográfica Computarizada',
-    description: 'Fijación de implantes de titanio grado quirúrgico con guías 3D personalizadas. Cirugía mínimamente invasiva con recuperación acelerada.',
+    description: 'Fijación de implantes de titanio y coronas de zafiro de grado quirúrgico con guías 3D. Cirugía mínimamente invasiva con recuperación acelerada.',
     image: '/social-kit/ig-post-implantes.png',
-    features: ['Guía quirúrgica 3D', 'Titanio biocompatible', 'Recuperación express'],
+    features: ['Guía quirúrgica 3D', 'Titanio y zafiro biocompatible', 'Recuperación express'],
     badge: 'Alta Complejidad',
     accent: 'border-teal-400/40 text-teal-300',
   },
   {
     id: 'urgencias-triage-247',
-    title: 'Triage de Urgencias 24/7',
+    title: 'Guardia de Urgencias Odontológicas 24/7',
     category: 'Guardia Inmediata',
+    price: 'Triage inmediato',
     subtitle: 'Priorización y Alivio Inmediato',
     description: 'Asistencia prioritaria para dolor agudo, inflamación o traumatismos. Nuestro agente inteligente evalúa el cuadro y bloquea un turno de urgencia en Calendar.',
     image: '/social-kit/ig-post-urgencias.png',
@@ -76,7 +79,7 @@ export default function Features() {
             </span>
           </h2>
           <p className="text-titanium-300 text-sm sm:text-base leading-relaxed">
-            Explora nuestros tratamientos principales. Selecciona el servicio que necesitas y nuestro sistema coordinará tu cita directamente en la agenda médica.
+            Explora nuestros tratamientos principales con aranceles transparentes. Selecciona el servicio que necesitas y nuestro sistema coordinará tu cita directamente en la agenda médica.
           </p>
         </div>
 
@@ -109,6 +112,18 @@ export default function Features() {
                   <span className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase bg-abyssal/90 backdrop-blur-md border ${treatment.accent}`}>
                     {treatment.badge}
                   </span>
+                </div>
+
+                {/* Price Overlay Bar */}
+                <div className="absolute bottom-3 left-4 right-4">
+                  <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-sapphire-950/85 backdrop-blur-md border border-cyan-bright/30 text-xs">
+                    <span className="text-titanium-400 flex items-center gap-1 font-medium">
+                      <Tag className="w-3 h-3 text-cyan-bright" /> Arancel est.:
+                    </span>
+                    <span className="font-bold text-cyan-bright font-mono">
+                      {treatment.price}
+                    </span>
+                  </div>
                 </div>
               </div>
 
