@@ -82,6 +82,17 @@ class OmniChannelPipeline:
         # 3. Update session cache
         history.append({"role": "user", "content": message.raw_text})
         history.append({"role": "assistant", "content": solution.reply})
+        if len(self.sessions) > 100:
+            overflow = len(self.sessions) - 100
+            for old_k in list(self.sessions.keys())[:overflow]:
+                self.sessions.pop(old_k, None)
+
+        # 4. Trigger runtime cleanup (anti-bloat)
+        try:
+            from app.core.cleanup import run_runtime_cleanup
+            run_runtime_cleanup(force=False)
+        except Exception:
+            pass
 
         return solution
 

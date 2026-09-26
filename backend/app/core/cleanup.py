@@ -16,7 +16,7 @@ class RuntimeCleanupManager:
     3. Triggers garbage collection (gc.collect()) to release heap memory back to the OS.
     """
 
-    def __init__(self, max_cached_users: int = 100, max_temp_file_age_sec: int = 3600) -> None:
+    def __init__(self, max_cached_users: int = 100, max_temp_file_age_sec: int = 300) -> None:
         self.max_cached_users = max_cached_users
         self.max_temp_file_age_sec = max_temp_file_age_sec
         self.last_cleanup_timestamp = time.time()
@@ -45,13 +45,18 @@ class RuntimeCleanupManager:
         return pruned_stats
 
     def purge_temp_files(self) -> int:
-        """Purges orphaned temporary files older than max_temp_file_age_sec."""
-        temp_dir = tempfile.gettempdir()
-        patterns = [
-            os.path.join(temp_dir, "*.tmp"),
-            os.path.join(temp_dir, "tmp*"),
-            os.path.join(temp_dir, "lumina_*"),
-        ]
+        """Purges orphaned temporary files older than max_temp_file_age_sec (5 min)."""
+        temp_dirs = set([tempfile.gettempdir()])
+        if os.path.isdir("/tmp"):
+            temp_dirs.add("/tmp")
+
+        patterns = []
+        for d in temp_dirs:
+            patterns.extend([
+                os.path.join(d, "*.tmp"),
+                os.path.join(d, "tmp*"),
+                os.path.join(d, "lumina_*"),
+            ])
         now = time.time()
         removed_count = 0
 

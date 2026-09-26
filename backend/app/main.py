@@ -1,7 +1,7 @@
-import os
+from contextlib import asynccontextmanager
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, HTTPException, Request, Query, Depends
+from fastapi import FastAPI, HTTPException, Request, Query, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -14,10 +14,34 @@ from app.models.dental_models import AppointmentRecord, AppointmentCreateRequest
 from app.social_gateways.meta import router as meta_router
 from app.social_gateways.youtube import router as youtube_router
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Modern lifespan context manager replacing deprecated @app.on_event handlers."""
+    # Startup actions
+    try:
+        db_manager.seed_clinical_knowledge()
+    except Exception as e:
+        print(f"[Main Lifespan Startup] Notice: Database knowledge seed warning: {e}")
+    try:
+        cleanup_manager.perform_cleanup(force=True)
+    except Exception as e:
+        print(f"[Main Lifespan Startup] Notice: Initial cleanup warning: {e}")
+
+    yield
+
+    # Shutdown actions
+    try:
+        cleanup_manager.perform_cleanup(force=True)
+    except Exception:
+        pass
+
+
 app = FastAPI(
     title="Dental Clinic Multi-Agent Omnichannel Hub",
     description="Sistema Multi-Agente para Clínica Dental con soporte para WhatsApp, Facebook, Instagram, YouTube y Google Calendar",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Register Social Gateways (Meta & YouTube)
@@ -57,17 +81,6 @@ async def runtime_cleanup_middleware(request: Request, call_next):
     cleanup_manager.perform_cleanup(force=False)
     return response
 
-@app.on_event("startup")
-def on_startup():
-    try:
-        db_manager.seed_clinical_knowledge()
-    except Exception as e:
-        print(f"[Main Startup] Notice: Database knowledge seed warning: {e}")
-    try:
-        cleanup_manager.perform_cleanup(force=True)
-    except Exception as e:
-        print(f"[Main Startup] Notice: Initial cleanup warning: {e}")
-
 @app.get("/")
 def health_check():
     return {
@@ -81,7 +94,7 @@ def health_check():
 
 
 @app.post("/api/chat")
-def handle_chat_message(payload: ChatMessageRequest):
+def handle_chat_message(payload: ChatMessageRequest, background_tasks: BackgroundTasks):
     """Processes an incoming message through the multi-agent coordinator."""
     try:
         result = coordinator.process_incoming_message(
@@ -106,6 +119,7 @@ def handle_chat_message(payload: ChatMessageRequest):
         if len(RECENT_ACTIVITIES) > 50:
             RECENT_ACTIVITIES.pop()
 
+        background_tasks.add_task(run_runtime_cleanup, False)
         return result.model_dump()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -113,7 +127,7 @@ def handle_chat_message(payload: ChatMessageRequest):
 # --- Webhook WhatsApp (From Baileys Service) ---
 @app.post("/api/webhooks/whatsapp")
 @app.post("/api/webhooks/whatsapp/")
-async def whatsapp_webhook(payload: Dict[str, Any]):
+async def whatsapp_webhook(payload: Dict[str, Any], background_tasks: BackgroundTasks):
     """Receives incoming WhatsApp messages from the Baileys Node.js bridge, processed via 3-agent pipeline."""
     omni_msg = pipeline.reader.from_whatsapp(payload)
 
@@ -123,6 +137,7 @@ async def whatsapp_webhook(payload: Dict[str, Any]):
         return {"status": "ignored_empty"}
 
     solution = pipeline.process_message(omni_msg)
+    background_tasks.add_task(run_runtime_cleanup, False)
 
     RECENT_ACTIVITIES.insert(0, {
         "id": f"act-{len(RECENT_ACTIVITIES) + 1}",
