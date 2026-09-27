@@ -65,3 +65,39 @@ export interface ChatMessage {
   intent?: string;
   timestamp: string;
 }
+
+export interface ChannelInboxMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  sender_name?: string;
+  agent?: string;
+  intent?: string;
+  content: string;
+  timestamp: string;
+  status?: string;
+}
+
+export interface ChannelInboxThread {
+  sender_id: string;
+  patient_name: string;
+  channel: string;
+  last_activity: string;
+  message_count: number;
+  patient_memory?: string | null;
+  messages: ChannelInboxMessage[];
+}
+
+export interface ChannelInboxData {
+  channel: string;
+  title: string;
+  total_messages: number;
+  active_threads: number;
+  last_message: {
+    sender_id: string;
+    patient_name: string;
+    content: string;
+    role: string;
+    timestamp: string;
+  } | null;
+  threads: ChannelInboxThread[];
+}

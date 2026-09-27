@@ -104,7 +104,10 @@ def test_appointment_agent_conversational_negotiation():
 
 def test_fastapi_calendar_endpoints_and_conflict_http_status():
     """Validates Task 2.3: FastAPI REST endpoints, slot query and HTTP 409 Conflict."""
-    test_d = (date.today() + timedelta(days=7)).strftime("%Y-%m-%d")
+    target_date = date.today() + timedelta(days=7)
+    if target_date.weekday() == 6:
+        target_date += timedelta(days=1)
+    test_d = target_date.strftime("%Y-%m-%d")
 
     # 1. Query slots
     res_slots = client.get(f"/api/slots?target_date={test_d}")

@@ -375,3 +375,52 @@ def test_crm_lifecycle_followup_and_nps():
     events_triggered = crm_lifecycle_service.trigger_lifecycle_tick(force=True)
     assert isinstance(events_triggered, dict)
     assert events_triggered.get("status") == "processed"
+
+
+def test_channels_inbox_endpoint():
+    """Validates real inbox threads grouped by channel from database."""
+    # Log test activities for instagram and youtube
+    db_manager.log_activity(
+        channel="instagram",
+        sender_id="ig_test_user_1",
+        sender_name="Martín Gómez",
+        message="Hola, ¿hacen blanqueamiento?",
+        reply="¡Hola Martín! Sí, realizamos blanqueamiento dental.",
+        agent="SolverAgent (Clinical Catalog)",
+        intent="INQUIRE_PRICE_OR_TREATMENT"
+    )
+    db_manager.log_activity(
+        channel="youtube",
+        sender_id="yt_test_comment_1",
+        sender_name="Mariana López",
+        message="Excelente video doctor, ¿dónde queda el consultorio?",
+        reply="¡Gracias Mariana! Estamos en Av. Santa Fe 2450.",
+        agent="SolverAgent (General FAQ)",
+        intent="GENERAL_FAQ"
+    )
+
+    response = client.get("/api/dashboard/channels-inbox")
+    assert response.status_code == 200
+    data = response.json()
+    assert "instagram" in data
+    assert "youtube" in data
+    assert "whatsapp" in data
+    assert "facebook" in data
+
+    ig = data["instagram"]
+    assert ig["total_messages"] >= 2
+    assert ig["active_threads"] >= 1
+    assert ig["last_message"] is not None
+    assert len(ig["threads"]) >= 1
+
+    yt = data["youtube"]
+    assert yt["total_messages"] >= 2
+    assert yt["active_threads"] >= 1
+
+    # Check that /api/dashboard/summary also contains channels_inbox
+    summary_resp = client.get("/api/dashboard/summary")
+    assert summary_resp.status_code == 200
+    summary_data = summary_resp.json()
+    assert "channels_inbox" in summary_data
+    assert "instagram" in summary_data["channels_inbox"]
+

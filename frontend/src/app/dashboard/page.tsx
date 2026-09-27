@@ -49,7 +49,10 @@ import {
   WhatsAppStatus,
   WhatsAppQRResponse,
   SlotsResponse,
-  ChatMessage
+  ChatMessage,
+  ChannelInboxData,
+  ChannelInboxThread,
+  ChannelInboxMessage
 } from '@/types';
 
 const FacebookIcon = ({ className }: { className?: string }) => (
@@ -124,6 +127,10 @@ export default function Dashboard() {
   const [urgencyFilter, setUrgencyFilter] = useState<string>('all');
   const [handoffLoading, setHandoffLoading] = useState<string | null>(null);
   const [sseConnected, setSseConnected] = useState<boolean>(false);
+  const [channelsInbox, setChannelsInbox] = useState<Record<string, ChannelInboxData>>({});
+  const [selectedChannelInbox, setSelectedChannelInbox] = useState<string | null>(null);
+  const [isSyncingYouTube, setIsSyncingYouTube] = useState<boolean>(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? sessionStorage.getItem('lumina_dashboard_auth') : null;
@@ -264,11 +271,45 @@ export default function Dashboard() {
       if (summaryRes.ok) {
         const summaryData = await summaryRes.json();
         setActivities(summaryData.recent_activities || []);
+        if (summaryData.channels_inbox) {
+          setChannelsInbox(summaryData.channels_inbox);
+        }
+      }
+
+      try {
+        const inboxRes = await fetch(`${BACKEND_URL}/api/dashboard/channels-inbox`);
+        if (inboxRes.ok) {
+          const inboxData = await inboxRes.json();
+          setChannelsInbox(inboxData || {});
+        }
+      } catch {
+        // Fallback to summary
       }
     } catch {
       setBackendOnline(false);
     }
   }, [BACKEND_URL]);
+
+  const handleSyncYouTube = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setIsSyncingYouTube(true);
+    setSyncMessage('Sincronizando comentarios con YouTube Data API v3...');
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/youtube/sync?force=true`);
+      if (res.ok) {
+        const data = await res.json();
+        setSyncMessage(`✓ Sincronizado: ${data.processed_new_comments || 0} nuevos comentarios.`);
+        await fetchBackendData();
+      } else {
+        setSyncMessage('Aviso: Verifique la cuota de YouTube API.');
+      }
+    } catch {
+      setSyncMessage('Error al sincronizar con YouTube.');
+    } finally {
+      setIsSyncingYouTube(false);
+      setTimeout(() => setSyncMessage(null), 5000);
+    }
+  };
 
   // 2. Fetch Slots for selected date
   const fetchSlots = useCallback(async (dateStr: string) => {
@@ -757,56 +798,91 @@ export default function Dashboard() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* WhatsApp */}
-                <div className="glass-card rounded-2xl p-5 border border-cyan-bright/20 shadow-xl flex flex-col justify-between relative overflow-hidden">
+                <div 
+                  onClick={() => setSelectedChannelInbox(prev => prev === 'whatsapp' ? null : 'whatsapp')}
+                  className={`glass-card rounded-2xl p-5 border shadow-xl flex flex-col justify-between relative overflow-hidden cursor-pointer transition-all duration-200 ${
+                    selectedChannelInbox === 'whatsapp' 
+                      ? 'border-emerald-400 bg-emerald-950/20 ring-2 ring-emerald-500/30' 
+                      : 'border-cyan-bright/20 hover:border-emerald-400/50 hover:bg-white/[0.02]'
+                  }`}
+                >
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <div className="w-10 h-10 rounded-xl bg-emerald-950/80 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
                         <Smartphone className="w-5 h-5" />
                       </div>
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${
-                        waData.status === 'connected' ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30' :
-                        waData.status === 'waiting_for_scan' ? 'bg-amber-950 text-amber-300 border border-amber-500/30' : 'bg-slate-900 text-slate-400 border border-slate-700'
-                      }`}>
-                        <span className={`w-2 h-2 rounded-full ${
-                          waData.status === 'connected' ? 'bg-emerald-400 animate-pulse' :
-                          waData.status === 'waiting_for_scan' ? 'bg-amber-400 animate-bounce' : 'bg-slate-500'
-                        }`} />
-                        {waData.status === 'connected' ? 'Conectado' : waData.status === 'waiting_for_scan' ? 'Esperando QR' : 'Desconectado'}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-bright/15 text-cyan-bright border border-cyan-bright/40 shadow-cyan-glow flex items-center gap-1">
+                          <MessageSquare className="w-2.5 h-2.5" />
+                          {channelsInbox.whatsapp?.total_messages || 0} msgs
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 ${
+                          waData.status === 'connected' ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30' :
+                          waData.status === 'waiting_for_scan' ? 'bg-amber-950 text-amber-300 border border-amber-500/30' : 'bg-slate-900 text-slate-400 border border-slate-700'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            waData.status === 'connected' ? 'bg-emerald-400 animate-pulse' :
+                            waData.status === 'waiting_for_scan' ? 'bg-amber-400 animate-bounce' : 'bg-slate-500'
+                          }`} />
+                          {waData.status === 'connected' ? 'Conectado' : waData.status === 'waiting_for_scan' ? 'QR' : 'Offline'}
+                        </span>
+                      </div>
                     </div>
 
                     <h3 className="font-bold text-white text-sm">WhatsApp (Baileys Bridge)</h3>
-                    <p className="text-xs text-titanium-400 mt-1">Conexión WebSocket directa sin pago de API oficial ni intermediarios.</p>
+                    <p className="text-xs text-titanium-400 mt-1">Conexión WebSocket directa y persistencia en Neon Postgres.</p>
 
-                    <div className="mt-3 pt-3 border-t border-white/10">
-                      <div className="flex items-center gap-1.5">
-                        <Database className="w-3.5 h-3.5 text-cyan-bright" />
-                        <span className="text-[11px] font-bold text-titanium-300">Persistencia:</span>
-                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-purple-950/80 text-purple-300 border border-purple-500/30">
-                          {waData.neonConfigured ? '⚡ Neon Postgres' : '💾 Disco Contingencia'}
-                        </span>
-                      </div>
-                      {waData.user && (
-                        <p className="text-[11px] font-mono text-emerald-400 mt-1 truncate">
-                          Línea: {waData.user}
-                        </p>
+                    {/* Preview box */}
+                    <div className="mt-3 p-2.5 rounded-xl bg-black/40 border border-white/10 text-left">
+                      {channelsInbox.whatsapp?.last_message ? (
+                        <>
+                          <div className="flex items-center justify-between text-[10px] text-titanium-400 mb-1">
+                            <span className="font-semibold text-white truncate max-w-[120px]">
+                              {channelsInbox.whatsapp.last_message.patient_name || channelsInbox.whatsapp.last_message.sender_id}
+                            </span>
+                            <span className="text-[9px] font-mono text-cyan-bright/80">
+                              {new Date(channelsInbox.whatsapp.last_message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} hs
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-titanium-200 line-clamp-2 italic">
+                            "{channelsInbox.whatsapp.last_message.content}"
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-[11px] text-titanium-400 italic">Sin mensajes registrados aún en Neon</p>
                       )}
                     </div>
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-white/10 flex items-center gap-2">
                     <button
-                      onClick={() => setShowQrModal(true)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-abyssal rounded-xl transition shadow-xs cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedChannelInbox(prev => prev === 'whatsapp' ? null : 'whatsapp');
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 text-xs font-bold bg-cyan-bright/20 hover:bg-cyan-bright/30 text-cyan-bright border border-cyan-bright/40 rounded-xl transition cursor-pointer"
                     >
-                      <QrCode className="w-3.5 h-3.5" />
-                      {waData.status === 'connected' ? 'Ver Conexión' : 'Escanear QR'}
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      💬 Ver Mensajes ({channelsInbox.whatsapp?.total_messages || 0})
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowQrModal(true);
+                      }}
+                      className="p-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl transition cursor-pointer"
+                      title="Ver Conexión / QR"
+                    >
+                      <QrCode className="w-4 h-4" />
                     </button>
                     {waData.status === 'connected' && (
                       <button
-                        onClick={handleDisconnectWhatsApp}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDisconnectWhatsApp();
+                        }}
                         disabled={isDisconnectingWA}
-                        className="p-2 text-rose-400 hover:bg-rose-950/50 rounded-xl transition border border-rose-500/30 cursor-pointer"
+                        className="p-1.5 text-rose-400 hover:bg-rose-950/50 rounded-xl transition border border-rose-500/30 cursor-pointer"
                         title="Cerrar sesión de WhatsApp"
                       >
                         <LogOut className="w-4 h-4" />
@@ -816,62 +892,324 @@ export default function Dashboard() {
                 </div>
 
                 {/* Facebook Messenger */}
-                <div className="glass-card rounded-2xl p-5 border border-cyan-bright/20 shadow-xl flex flex-col justify-between">
+                <div 
+                  onClick={() => setSelectedChannelInbox(prev => prev === 'facebook' ? null : 'facebook')}
+                  className={`glass-card rounded-2xl p-5 border shadow-xl flex flex-col justify-between relative overflow-hidden cursor-pointer transition-all duration-200 ${
+                    selectedChannelInbox === 'facebook' 
+                      ? 'border-blue-400 bg-blue-950/20 ring-2 ring-blue-500/30' 
+                      : 'border-cyan-bright/20 hover:border-blue-400/50 hover:bg-white/[0.02]'
+                  }`}
+                >
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <div className="w-10 h-10 rounded-xl bg-blue-950/80 text-blue-400 flex items-center justify-center border border-blue-500/30">
                         <FacebookIcon className="w-5 h-5" />
                       </div>
-                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-950 text-blue-300 border border-blue-500/30 inline-flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" /> Webhook Activo
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-bright/15 text-cyan-bright border border-cyan-bright/40 shadow-cyan-glow flex items-center gap-1">
+                          <MessageSquare className="w-2.5 h-2.5" />
+                          {channelsInbox.facebook?.total_messages || 0} msgs
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-950 text-blue-300 border border-blue-500/30 inline-flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" /> Webhook
+                        </span>
+                      </div>
                     </div>
                     <h3 className="font-bold text-white text-sm">Facebook Messenger</h3>
                     <p className="text-xs text-titanium-400 mt-1">Recepción y respuesta de consultas privadas en la Fan Page.</p>
+
+                    {/* Preview box */}
+                    <div className="mt-3 p-2.5 rounded-xl bg-black/40 border border-white/10 text-left">
+                      {channelsInbox.facebook?.last_message ? (
+                        <>
+                          <div className="flex items-center justify-between text-[10px] text-titanium-400 mb-1">
+                            <span className="font-semibold text-white truncate max-w-[120px]">
+                              {channelsInbox.facebook.last_message.patient_name || channelsInbox.facebook.last_message.sender_id}
+                            </span>
+                            <span className="text-[9px] font-mono text-cyan-bright/80">
+                              {new Date(channelsInbox.facebook.last_message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} hs
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-titanium-200 line-clamp-2 italic">
+                            "{channelsInbox.facebook.last_message.content}"
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-[11px] text-titanium-400 italic">Sin mensajes registrados aún en Neon</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-4 pt-3 border-t border-white/10 text-xs text-titanium-300 flex items-center gap-1.5 font-medium">
-                    <CheckCircle2 className="w-4 h-4 text-cyan-bright" /> Meta Developer Live Mode
+
+                  <div className="mt-4 pt-3 border-t border-white/10">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedChannelInbox(prev => prev === 'facebook' ? null : 'facebook');
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2.5 text-xs font-bold bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 rounded-xl transition cursor-pointer"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      💬 Ver Mensajes ({channelsInbox.facebook?.total_messages || 0})
+                    </button>
                   </div>
                 </div>
 
                 {/* Instagram Direct */}
-                <div className="glass-card rounded-2xl p-5 border border-cyan-bright/20 shadow-xl flex flex-col justify-between">
+                <div 
+                  onClick={() => setSelectedChannelInbox(prev => prev === 'instagram' ? null : 'instagram')}
+                  className={`glass-card rounded-2xl p-5 border shadow-xl flex flex-col justify-between relative overflow-hidden cursor-pointer transition-all duration-200 ${
+                    selectedChannelInbox === 'instagram' 
+                      ? 'border-pink-400 bg-pink-950/20 ring-2 ring-pink-500/30' 
+                      : 'border-cyan-bright/20 hover:border-pink-400/50 hover:bg-white/[0.02]'
+                  }`}
+                >
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <div className="w-10 h-10 rounded-xl bg-pink-950/80 text-pink-400 flex items-center justify-center border border-pink-500/30">
                         <InstagramIcon className="w-5 h-5" />
                       </div>
-                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-pink-950 text-pink-300 border border-pink-500/30 inline-flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-pink-400 animate-pulse" /> DMs & Reels
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-bright/15 text-cyan-bright border border-cyan-bright/40 shadow-cyan-glow flex items-center gap-1">
+                          <MessageSquare className="w-2.5 h-2.5" />
+                          {channelsInbox.instagram?.total_messages || 0} msgs
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-950 text-pink-300 border border-pink-500/30 inline-flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-pulse" /> DMs
+                        </span>
+                      </div>
                     </div>
                     <h3 className="font-bold text-white text-sm">Instagram Direct</h3>
                     <p className="text-xs text-titanium-400 mt-1">Respuestas a preguntas en publicaciones, reels y mensajes directos.</p>
+
+                    {/* Preview box */}
+                    <div className="mt-3 p-2.5 rounded-xl bg-black/40 border border-white/10 text-left">
+                      {channelsInbox.instagram?.last_message ? (
+                        <>
+                          <div className="flex items-center justify-between text-[10px] text-titanium-400 mb-1">
+                            <span className="font-semibold text-white truncate max-w-[120px]">
+                              {channelsInbox.instagram.last_message.patient_name || channelsInbox.instagram.last_message.sender_id}
+                            </span>
+                            <span className="text-[9px] font-mono text-cyan-bright/80">
+                              {new Date(channelsInbox.instagram.last_message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} hs
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-titanium-200 line-clamp-2 italic">
+                            "{channelsInbox.instagram.last_message.content}"
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-[11px] text-titanium-400 italic">Sin mensajes registrados aún en Neon</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-4 pt-3 border-t border-white/10 text-xs text-titanium-300 flex items-center gap-1.5 font-medium">
-                    <CheckCircle2 className="w-4 h-4 text-cyan-bright" /> Graph API Free Tier
+
+                  <div className="mt-4 pt-3 border-t border-white/10">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedChannelInbox(prev => prev === 'instagram' ? null : 'instagram');
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2.5 text-xs font-bold bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/40 rounded-xl transition cursor-pointer"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      💬 Ver Mensajes ({channelsInbox.instagram?.total_messages || 0})
+                    </button>
                   </div>
                 </div>
 
                 {/* YouTube Comments */}
-                <div className="glass-card rounded-2xl p-5 border border-cyan-bright/20 shadow-xl flex flex-col justify-between">
+                <div 
+                  onClick={() => setSelectedChannelInbox(prev => prev === 'youtube' ? null : 'youtube')}
+                  className={`glass-card rounded-2xl p-5 border shadow-xl flex flex-col justify-between relative overflow-hidden cursor-pointer transition-all duration-200 ${
+                    selectedChannelInbox === 'youtube' 
+                      ? 'border-red-400 bg-red-950/20 ring-2 ring-red-500/30' 
+                      : 'border-cyan-bright/20 hover:border-red-400/50 hover:bg-white/[0.02]'
+                  }`}
+                >
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <div className="w-10 h-10 rounded-xl bg-red-950/80 text-red-400 flex items-center justify-center border border-red-500/30">
                         <YoutubeIcon className="w-5 h-5" />
                       </div>
-                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-red-950 text-red-300 border border-red-500/30 inline-flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" /> Comentarios
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-bright/15 text-cyan-bright border border-cyan-bright/40 shadow-cyan-glow flex items-center gap-1">
+                          <MessageSquare className="w-2.5 h-2.5" />
+                          {channelsInbox.youtube?.total_messages || 0} msgs
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-950 text-red-300 border border-red-500/30 inline-flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" /> Videos
+                        </span>
+                      </div>
                     </div>
                     <h3 className="font-bold text-white text-sm">Canal de YouTube</h3>
                     <p className="text-xs text-titanium-400 mt-1">Sondeo cada 10 min de consultas en videos y guía a agendar.</p>
+
+                    {/* Preview box */}
+                    <div className="mt-3 p-2.5 rounded-xl bg-black/40 border border-white/10 text-left">
+                      {channelsInbox.youtube?.last_message ? (
+                        <>
+                          <div className="flex items-center justify-between text-[10px] text-titanium-400 mb-1">
+                            <span className="font-semibold text-white truncate max-w-[120px]">
+                              {channelsInbox.youtube.last_message.patient_name || channelsInbox.youtube.last_message.sender_id}
+                            </span>
+                            <span className="text-[9px] font-mono text-cyan-bright/80">
+                              {new Date(channelsInbox.youtube.last_message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} hs
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-titanium-200 line-clamp-2 italic">
+                            "{channelsInbox.youtube.last_message.content}"
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-[11px] text-titanium-400 italic">Sin mensajes registrados aún en Neon</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-4 pt-3 border-t border-white/10 text-xs text-titanium-300 flex items-center gap-1.5 font-medium">
-                    <CheckCircle2 className="w-4 h-4 text-cyan-bright" /> Google Cloud Free Quota
+
+                  <div className="mt-4 pt-3 border-t border-white/10 flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedChannelInbox(prev => prev === 'youtube' ? null : 'youtube');
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-bold bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40 rounded-xl transition cursor-pointer"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      💬 Ver ({channelsInbox.youtube?.total_messages || 0})
+                    </button>
+                    <button
+                      onClick={handleSyncYouTube}
+                      disabled={isSyncingYouTube}
+                      className="flex items-center justify-center gap-1 py-1.5 px-2.5 text-xs font-bold bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/10 transition cursor-pointer disabled:opacity-50"
+                      title="Forzar Sincronización inmediata con YouTube"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncingYouTube ? 'animate-spin' : ''}`} />
+                      <span className="text-[10px]">Sync</span>
+                    </button>
                   </div>
+                  {syncMessage && (
+                    <div className="mt-2 text-[10px] text-cyan-bright font-mono animate-fadeIn">
+                      {syncMessage}
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* Visor de Conversaciones en Vivo (Neon PostgreSQL) */}
+              {selectedChannelInbox && (
+                <div className="mt-6 glass-panel rounded-3xl p-5 sm:p-6 border border-cyan-bright/40 shadow-2xl bg-sapphire-950/95 animate-fadeIn">
+                  <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-white/10">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-cyan-bright/20 text-cyan-bright flex items-center justify-center border border-cyan-bright/40 shadow-cyan-glow">
+                        <MessageSquare className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-extrabold text-white text-base">
+                            Bandeja de Entrada: {channelsInbox[selectedChannelInbox]?.title || selectedChannelInbox.toUpperCase()}
+                          </h3>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-bright/20 text-cyan-bright border border-cyan-bright/40">
+                            ⚡ Neon PostgreSQL
+                          </span>
+                        </div>
+                        <p className="text-xs text-titanium-400 mt-0.5">
+                          {channelsInbox[selectedChannelInbox]?.active_threads || 0} pacientes / hilos activos • {channelsInbox[selectedChannelInbox]?.total_messages || 0} turnos registrados
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {selectedChannelInbox === 'youtube' && (
+                        <button
+                          onClick={handleSyncYouTube}
+                          disabled={isSyncingYouTube}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white transition shadow-xs cursor-pointer"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isSyncingYouTube ? 'animate-spin' : ''}`} />
+                          Forzar Sincronización
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setSelectedChannelInbox(null)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-titanium-300 hover:text-white transition cursor-pointer border border-white/10"
+                      >
+                        Cerrar Visor ✕
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                    {channelsInbox[selectedChannelInbox]?.threads && channelsInbox[selectedChannelInbox].threads.length > 0 ? (
+                      channelsInbox[selectedChannelInbox].threads.map((thread, idx) => (
+                        <div key={thread.sender_id || idx} className="rounded-2xl p-4 bg-abyssal/90 border border-white/10 hover:border-cyan-bright/30 transition">
+                          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-white/10">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-full bg-cyan-bright/20 text-cyan-bright font-bold flex items-center justify-center text-xs border border-cyan-bright/30">
+                                {thread.patient_name ? thread.patient_name.charAt(0).toUpperCase() : 'P'}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-white text-sm">{thread.patient_name}</span>
+                                  <span className="text-[11px] font-mono text-titanium-400">({thread.sender_id})</span>
+                                </div>
+                                <span className="text-[10px] text-titanium-400">
+                                  Última actividad: {new Date(thread.last_activity).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+
+                            {thread.patient_memory && (
+                              <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-purple-950/60 border border-purple-500/30 text-[11px] text-purple-200">
+                                <BrainCircuit className="w-3.5 h-3.5 text-purple-400" />
+                                <span className="font-semibold text-purple-300">Memoria RAG:</span> {thread.patient_memory}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-3">
+                            {thread.messages.map((m, mIdx) => (
+                              <div
+                                key={m.id || mIdx}
+                                className={`flex flex-col ${m.role === 'user' ? 'items-start' : 'items-end'}`}
+                              >
+                                <div className={`max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed ${
+                                  m.role === 'user'
+                                    ? 'bg-sapphire-900/80 border border-sapphire-700/60 text-slate-100 rounded-tl-sm'
+                                    : 'bg-cyan-950/70 border border-cyan-bright/40 text-cyan-50 shadow-cyan-glow/10 rounded-tr-sm'
+                                }`}>
+                                  <div className="flex items-center justify-between gap-4 mb-1 text-[10px] font-bold">
+                                    <span className={m.role === 'user' ? 'text-cyan-300' : 'text-emerald-400'}>
+                                      {m.role === 'user' ? `👤 ${m.sender_name || 'Paciente'}` : `🤖 ${m.agent || 'SolverAgent'}`}
+                                    </span>
+                                    {m.intent && (
+                                      <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-titanium-300">
+                                        {m.intent}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="whitespace-pre-wrap">{m.content}</p>
+                                  <div className="mt-1.5 flex items-center justify-end gap-1.5 text-[9px] text-titanium-400 font-mono">
+                                    <span>{new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} hs</span>
+                                    {m.status && <CheckCheck className="w-3 h-3 text-cyan-bright" />}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-8 text-center rounded-2xl bg-black/30 border border-white/10">
+                        <MessageSquare className="w-8 h-8 text-titanium-400 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm font-bold text-white">No hay mensajes registrados aún en este canal en Neon PostgreSQL.</p>
+                        <p className="text-xs text-titanium-400 mt-1 max-w-md mx-auto">
+                          Puedes probar este canal usando el Simulador Omnicanal inferior o enviando un mensaje directo.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </section>
 
             {/* Simulator Console & Google Calendar Agenda */}

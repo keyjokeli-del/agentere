@@ -319,15 +319,23 @@ def export_admin_csv(x_admin_key: Optional[str] = Header(None, alias="X-Admin-Ke
     )
 
 
+@app.get("/api/dashboard/channels-inbox")
+def get_channels_inbox():
+    """Returns real inbox threads and message statistics per channel from Neon PostgreSQL."""
+    return db_manager.get_channels_inbox()
+
+
 @app.get("/api/dashboard/summary")
 def dashboard_summary():
     """Returns dashboard metrics with persistent activities from Neon PostgreSQL."""
     appointments = calendar_service.list_appointments()
     recent_activities = db_manager.get_recent_activities(limit=25)
+    channels_inbox = db_manager.get_channels_inbox()
 
     return {
         "total_appointments": len(appointments),
         "recent_activities": recent_activities,
+        "channels_inbox": channels_inbox,
         "clinic_info": {
             "name": settings.clinic_name,
             "address": settings.clinic_address,

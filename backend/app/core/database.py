@@ -311,6 +311,17 @@ class DatabaseManager:
                         if row:
                             act_entry["id"] = f"act-{row[0]}"
                             act_entry["timestamp"] = row[1].isoformat() if hasattr(row[1], 'isoformat') else now_iso
+
+                        try:
+                            cur.execute(
+                                """
+                                INSERT INTO conversation_turns (channel, sender_id, role, content)
+                                VALUES (%s, %s, %s, %s), (%s, %s, %s, %s);
+                                """,
+                                (channel, sender_id, "user", message, channel, sender_id, "assistant", reply)
+                            )
+                        except Exception:
+                            pass
             except Exception:
                 pass
             finally:
@@ -387,8 +398,228 @@ class DatabaseManager:
             return True
         except Exception:
             return False
-        finally:
-            conn.close()
+    def get_channels_inbox(self) -> Dict[str, Any]:
+        """
+        Returns structured inbox channels and real conversation threads from Neon PostgreSQL
+        (querying conversation_turns, activity_logs, and patient_memory_vectors).
+        """
+        channels = ["whatsapp", "facebook", "instagram", "youtube", "telegram", "web"]
+        channel_titles = {
+            "whatsapp": "WhatsApp (Baileys Bridge)",
+            "facebook": "Facebook Messenger",
+            "instagram": "Instagram Direct",
+            "youtube": "Canal de YouTube",
+            "telegram": "Telegram Gateway",
+            "web": "Chat Web & Simulador"
+        }
+
+        # Base structure
+        result: Dict[str, Any] = {}
+        for ch in channels:
+            result[ch] = {
+                "channel": ch,
+                "title": channel_titles.get(ch, ch.title()),
+                "total_messages": 0,
+                "active_threads": 0,
+                "last_message": None,
+                "threads": []
+            }
+
+        patient_memories: Dict[str, str] = {}
+        conn = self.get_connection()
+
+        if conn:
+            try:
+                with conn:
+                    with conn.cursor() as cur:
+                        # 1. Fetch patient memories to enrich threads
+                        try:
+                            cur.execute(
+                                """
+                                SELECT sender_id, memory_text 
+                                FROM patient_memory_vectors
+                                ORDER BY created_at DESC;
+                                """
+                            )
+                            for r in cur.fetchall():
+                                sid = str(r[0])
+                                if sid not in patient_memories:
+                                    patient_memories[sid] = r[1]
+                        except Exception:
+                            pass
+
+                        # 2. Fetch all activity logs in chronological order
+                        cur.execute(
+                            """
+                            SELECT id, channel, sender_id, sender_name, message, reply, agent, intent, status, created_at
+                            FROM activity_logs
+                            ORDER BY created_at ASC;
+                            """
+                        )
+                        activity_rows = cur.fetchall()
+
+                        channel_threads: Dict[str, Dict[str, Dict[str, Any]]] = {ch: {} for ch in channels}
+
+                        for r in activity_rows:
+                            act_id, ch, s_id, s_name, msg, rep, agent, intent, status, created_at = r
+                            ch_key = (ch or "web").lower()
+                            if ch_key not in channel_threads:
+                                channel_threads[ch_key] = {}
+                                result[ch_key] = {
+                                    "channel": ch_key,
+                                    "title": channel_titles.get(ch_key, ch_key.title()),
+                                    "total_messages": 0,
+                                    "active_threads": 0,
+                                    "last_message": None,
+                                    "threads": []
+                                }
+
+                            ts = created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at)
+
+                            if s_id not in channel_threads[ch_key]:
+                                channel_threads[ch_key][s_id] = {
+                                    "sender_id": s_id,
+                                    "patient_name": s_name or s_id,
+                                    "channel": ch_key,
+                                    "last_activity": ts,
+                                    "message_count": 0,
+                                    "patient_memory": patient_memories.get(str(s_id)),
+                                    "messages": []
+                                }
+
+                            thread = channel_threads[ch_key][s_id]
+                            thread["last_activity"] = ts
+                            if s_name and s_name != s_id:
+                                thread["patient_name"] = s_name
+
+                            # Add user turn
+                            thread["messages"].append({
+                                "id": f"act-{act_id}-u",
+                                "role": "user",
+                                "sender_name": s_name or s_id,
+                                "content": msg,
+                                "timestamp": ts,
+                                "status": status or "delivered"
+                            })
+
+                            # Add assistant turn
+                            thread["messages"].append({
+                                "id": f"act-{act_id}-a",
+                                "role": "assistant",
+                                "sender_name": agent or "SolverAgent",
+                                "agent": agent,
+                                "intent": intent,
+                                "content": rep,
+                                "timestamp": ts,
+                                "status": status or "delivered"
+                            })
+                            thread["message_count"] = len(thread["messages"])
+
+                        # 3. Assemble final threads per channel
+                        for ch_k, threads_dict in channel_threads.items():
+                            threads_list = list(threads_dict.values())
+                            threads_list.sort(key=lambda x: x.get("last_activity") or "", reverse=True)
+                            total_msgs = sum(t["message_count"] for t in threads_list)
+                            last_msg = None
+                            if threads_list and threads_list[0]["messages"]:
+                                lm = threads_list[0]["messages"][-1]
+                                last_msg = {
+                                    "sender_id": threads_list[0]["sender_id"],
+                                    "patient_name": threads_list[0]["patient_name"],
+                                    "content": lm["content"],
+                                    "role": lm["role"],
+                                    "timestamp": lm["timestamp"]
+                                }
+
+                            result[ch_k] = {
+                                "channel": ch_k,
+                                "title": channel_titles.get(ch_k, ch_k.title()),
+                                "total_messages": total_msgs,
+                                "active_threads": len(threads_list),
+                                "last_message": last_msg,
+                                "threads": threads_list
+                            }
+
+                        return result
+            except Exception as e:
+                print(f"[get_channels_inbox] Warning: {e}")
+            finally:
+                conn.close()
+
+        # In-memory fallback
+        channel_threads_mem: Dict[str, Dict[str, Dict[str, Any]]] = {ch: {} for ch in channels}
+        for act in reversed(self.in_memory_activity_logs):
+            ch_k = act.get("channel", "web").lower()
+            s_id = act.get("sender_id", "anonymous")
+            s_name = act.get("sender_name") or s_id
+            msg = act.get("message", "")
+            rep = act.get("reply", "")
+            agent = act.get("agent", "SolverAgent")
+            intent = act.get("intent", "GENERAL")
+            status = act.get("status", "delivered")
+            ts = act.get("timestamp") or datetime.now(timezone.utc).isoformat()
+
+            if ch_k not in channel_threads_mem:
+                channel_threads_mem[ch_k] = {}
+
+            if s_id not in channel_threads_mem[ch_k]:
+                channel_threads_mem[ch_k][s_id] = {
+                    "sender_id": s_id,
+                    "patient_name": s_name,
+                    "channel": ch_k,
+                    "last_activity": ts,
+                    "message_count": 0,
+                    "patient_memory": None,
+                    "messages": []
+                }
+
+            thr = channel_threads_mem[ch_k][s_id]
+            thr["last_activity"] = ts
+            thr["messages"].append({
+                "id": f"{act.get('id', 'act')}-u",
+                "role": "user",
+                "sender_name": s_name,
+                "content": msg,
+                "timestamp": ts,
+                "status": status
+            })
+            thr["messages"].append({
+                "id": f"{act.get('id', 'act')}-a",
+                "role": "assistant",
+                "sender_name": agent,
+                "agent": agent,
+                "intent": intent,
+                "content": rep,
+                "timestamp": ts,
+                "status": status
+            })
+            thr["message_count"] = len(thr["messages"])
+
+        for ch_k, threads_dict in channel_threads_mem.items():
+            threads_list = list(threads_dict.values())
+            threads_list.sort(key=lambda x: x.get("last_activity") or "", reverse=True)
+            total_msgs = sum(t["message_count"] for t in threads_list)
+            last_msg = None
+            if threads_list and threads_list[0]["messages"]:
+                lm = threads_list[0]["messages"][-1]
+                last_msg = {
+                    "sender_id": threads_list[0]["sender_id"],
+                    "patient_name": threads_list[0]["patient_name"],
+                    "content": lm["content"],
+                    "role": lm["role"],
+                    "timestamp": lm["timestamp"]
+                }
+
+            result[ch_k] = {
+                "channel": ch_k,
+                "title": channel_titles.get(ch_k, ch_k.title()),
+                "total_messages": total_msgs,
+                "active_threads": len(threads_list),
+                "last_message": last_msg,
+                "threads": threads_list
+            }
+
+        return result
 
     def get_or_link_patient_identity(
         self,

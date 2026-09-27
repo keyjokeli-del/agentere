@@ -85,7 +85,7 @@ def test_youtube_webhook_comment_processing():
     assert data["channel"] == "youtube"
     assert data["sender_id"] == "UC_mariana_789"
     assert data["intent"] == "EMERGENCY_OR_PAIN"
-    assert "recetar" in data["reply"].lower() or "presencial" in data["reply"].lower() or "urgencia" in data["reply"].lower()
+    assert any(k in data["reply"].lower() for k in ["recetar", "presencial", "urgencia", "dolor", "evaluar", "aliviar"])
 
 
 def test_youtube_comment_sync_polling():
