@@ -75,6 +75,12 @@ export interface ChannelInboxMessage {
   content: string;
   timestamp: string;
   status?: string;
+  is_internal?: boolean;
+  audio_url?: string | null;
+  image_url?: string | null;
+  vision_analysis?: string | null;
+  rag_trace?: string[] | null;
+  sla_seconds?: number;
 }
 
 export interface ChannelInboxThread {
@@ -85,6 +91,13 @@ export interface ChannelInboxThread {
   message_count: number;
   patient_memory?: string | null;
   messages: ChannelInboxMessage[];
+  fdi_teeth?: string[];
+  urgency?: 'high' | 'normal';
+  crm_stage?: string;
+  sla_seconds?: number;
+  unread_count?: number;
+  is_ai_paused?: boolean;
+  cross_channels?: string[];
 }
 
 export interface ChannelInboxData {
@@ -101,3 +114,4 @@ export interface ChannelInboxData {
   } | null;
   threads: ChannelInboxThread[];
 }
+

@@ -43,6 +43,12 @@ const config: Config = {
           700: '#0f766e',
           900: '#134e4a',
         },
+        amber: {
+          clinical: '#F59E0B',
+        },
+        coral: {
+          emergency: '#FF3366',
+        },
       },
       backgroundImage: {
         'radial-gradient': 'radial-gradient(var(--tw-gradient-stops))',
