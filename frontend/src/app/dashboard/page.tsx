@@ -162,6 +162,9 @@ export default function Dashboard() {
           setIsAuthenticated(true);
           if (typeof window !== 'undefined') {
             sessionStorage.setItem('lumina_dashboard_auth', 'true');
+            if (data.admin_key) {
+              sessionStorage.setItem('lumina_admin_key', data.admin_key);
+            }
           }
           setPinError('');
           return;
@@ -355,11 +358,23 @@ export default function Dashboard() {
     setHandoffLoading(senderId);
     try {
       const method = currentStatus ? 'DELETE' : 'POST';
-      const res = await fetch(`${BACKEND_URL}/api/admin/handoff/${encodeURIComponent(senderId)}`, {
+      const adminKey = (typeof window !== 'undefined' ? sessionStorage.getItem('lumina_admin_key') : null) || 'lumina_admin_2026';
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-Admin-Key': adminKey,
+      };
+      const reqOptions: RequestInit = {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes: 'Intervención manual desde Dashboard' })
-      });
+        headers,
+      };
+      if (method === 'POST') {
+        reqOptions.body = JSON.stringify({
+          channel: 'web',
+          minutes: 30,
+          reason: 'Intervención manual desde Dashboard',
+        });
+      }
+      const res = await fetch(`${BACKEND_URL}/api/admin/handoff/${encodeURIComponent(senderId)}`, reqOptions);
       if (res.ok) {
         await fetchBackendData();
       }
@@ -372,7 +387,12 @@ export default function Dashboard() {
 
   const handleExportCsv = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/admin/export-csv`);
+      const adminKey = (typeof window !== 'undefined' ? sessionStorage.getItem('lumina_admin_key') : null) || 'lumina_admin_2026';
+      const res = await fetch(`${BACKEND_URL}/api/admin/export-csv`, {
+        headers: {
+          'X-Admin-Key': adminKey,
+        },
+      });
       if (!res.ok) throw new Error('Error al generar CSV');
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
