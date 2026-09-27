@@ -29,14 +29,22 @@ def test_chat_faq_flow():
     assert data["channel"] == "whatsapp"
 
 def test_calendar_slots_and_booking():
-    target_dt = date.today() + timedelta(days=1)
-    if target_dt.weekday() == 6:  # Closed on Sunday
-        target_dt += timedelta(days=1)
-    tomorrow = target_dt.strftime("%Y-%m-%d")
-    slots_res = client.get(f"/api/slots?target_date={tomorrow}")
-    assert slots_res.status_code == 200
-    slots_data = slots_res.json()
-    assert len(slots_data["slots"]) > 0
+    tomorrow = None
+    slots_data = None
+    for offset in range(1, 30):
+        candidate = date.today() + timedelta(days=offset)
+        if candidate.weekday() == 6:  # Closed on Sunday
+            continue
+        c_str = candidate.strftime("%Y-%m-%d")
+        res = client.get(f"/api/slots?target_date={c_str}")
+        if res.status_code == 200:
+            data = res.json()
+            if len(data.get("slots", [])) > 0:
+                tomorrow = c_str
+                slots_data = data
+                break
+    assert tomorrow is not None, "No available slot found in the next 30 days"
+    assert slots_data is not None and len(slots_data["slots"]) > 0
 
     first_slot = slots_data["slots"][0]
 

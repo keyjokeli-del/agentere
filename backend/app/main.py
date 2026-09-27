@@ -122,10 +122,17 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval'; "
-        "frame-ancestors 'none';"
-    )
+    path = request.url.path
+    if path in ("/docs", "/redoc", "/openapi.json"):
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "img-src 'self' data: https://fastapi.tiangolo.com; frame-ancestors 'none';"
+        )
+    elif path.startswith("/api/"):
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none';"
+    else:
+        response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
     return response
 
 
@@ -206,14 +213,15 @@ def auth_login(payload: VerifyPinRequest, request: Request, response: Response):
     reset_brute_force(ip)
     token = create_access_token({"sub": "admin", "role": "admin"})
 
-    # 4. Issue HttpOnly, Secure, SameSite=Strict Cookie
+    # 4. Issue HttpOnly, Secure Cookie (SameSite=none on production HTTPS for cross-site Vercel compatibility)
     is_secure = os.getenv("ENVIRONMENT") == "production"
+    samesite_val = "none" if is_secure else "lax"
     response.set_cookie(
         key="lumina_auth_token",
         value=token,
         httponly=True,
         secure=is_secure,
-        samesite="strict",
+        samesite=samesite_val,  # type: ignore[arg-type]
         max_age=28800
     )
 
@@ -281,10 +289,17 @@ def purge_patient_data(
 # Server-Sent Events (SSE) Stream
 # ==============================================================================
 @app.get("/api/dashboard/stream")
-async def dashboard_sse_stream():
+async def dashboard_sse_stream(
+    request: Request,
+    max_events: Optional[int] = Query(None, description="Max SSE events to stream before closing (useful for tests and single updates)"),
+    _admin: dict = Depends(verify_admin_jwt)
+):
     """Realtime Server-Sent Events connection streaming metrics, appointments, and activities to Dashboard."""
     async def event_generator():
+        count = 0
         while True:
+            if await request.is_disconnected():
+                break
             try:
                 activities = db_manager.get_recent_activities(limit=15)
                 appointments = calendar_service.list_appointments()
@@ -294,9 +309,15 @@ async def dashboard_sse_stream():
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 })
                 yield f"data: {data}\n\n"
+                count += 1
+                if max_events is not None and count >= max_events:
+                    break
             except Exception:
                 pass
-            await asyncio.sleep(4)
+            try:
+                await asyncio.sleep(4)
+            except asyncio.CancelledError:
+                break
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

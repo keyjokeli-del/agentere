@@ -402,7 +402,11 @@ export default function Dashboard() {
     if (!isAuthenticated) return;
     let es: EventSource | null = null;
     try {
-      es = new EventSource(`${BACKEND_URL}/api/dashboard/stream`);
+      const token = typeof window !== 'undefined' ? sessionStorage.getItem('lumina_jwt_token') : null;
+      const streamUrl = token 
+        ? `${BACKEND_URL}/api/dashboard/stream?token=${encodeURIComponent(token)}`
+        : `${BACKEND_URL}/api/dashboard/stream`;
+      es = new EventSource(streamUrl);
       es.onopen = () => setSseConnected(true);
       es.onmessage = (event) => {
         try {

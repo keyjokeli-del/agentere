@@ -142,6 +142,10 @@ async def verify_admin_jwt(
     if not token:
         token = request.cookies.get("lumina_auth_token")
 
+    # 3. Check query parameters (for EventSource SSE streams and WebSocket connections)
+    if not token:
+        token = request.query_params.get("token")
+
     if token:
         try:
             payload = decode_access_token(token)

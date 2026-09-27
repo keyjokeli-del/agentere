@@ -4,7 +4,7 @@ import base64
 import hashlib
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, MultiFernet
 
 from app.config import settings
 from app.services.embedding_service import embedding_service
@@ -12,13 +12,26 @@ from app.services.embedding_service import embedding_service
 # ==============================================================================
 # AES-256 / Fernet Encryption at Rest (Mejora 6)
 # ==============================================================================
-def get_fernet_cipher() -> Fernet:
-    key_src = os.getenv("DATA_ENCRYPTION_KEY") or os.getenv("JWT_SECRET") or "lumina_clinic_default_vault_secret_2026"
-    key_32 = hashlib.sha256(key_src.encode("utf-8")).digest()
-    fernet_key = base64.urlsafe_b64encode(key_32)
-    return Fernet(fernet_key)
+DEFAULT_VAULT_FERNET_KEY = b"ZebUNHJ0EW2On9z7ggBVGeAfagoXAxU53kKc0gr6Wb4="
 
-_cipher: Optional[Fernet] = None
+def get_fernet_cipher() -> MultiFernet:
+    key_src = os.getenv("DATA_ENCRYPTION_KEY") or os.getenv("JWT_SECRET") or "lumina_clinic_default_vault_secret_2026"
+    raw_str = key_src.strip()
+    primary_fern: Optional[Fernet] = None
+    try:
+        raw_bytes = raw_str.encode("utf-8")
+        if len(raw_bytes) == 44 and len(base64.urlsafe_b64decode(raw_bytes)) == 32:
+            primary_fern = Fernet(raw_bytes)
+    except Exception:
+        pass
+    if primary_fern is None:
+        key_32 = hashlib.sha256(raw_str.encode("utf-8")).digest()
+        primary_fern = Fernet(base64.urlsafe_b64encode(key_32))
+
+    fallback_fern = Fernet(DEFAULT_VAULT_FERNET_KEY)
+    return MultiFernet([primary_fern, fallback_fern])
+
+_cipher: Optional[MultiFernet] = None
 
 def encrypt_field(value: Optional[str]) -> Optional[str]:
     """Encrypts sensitive patient plaintext using AES-256 / Fernet at rest."""

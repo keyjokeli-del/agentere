@@ -135,10 +135,23 @@ def test_03_clinical_endpoints_authorization_bola_bfla():
     res3_auth = client.delete("/api/patient/purge/unauth_patient", headers=headers)
     assert res3_auth.status_code == 200
 
+    # 5. Query parameter token authorization (EventSource SSE compatibility)
+    res_stream_unauth = client.get("/api/dashboard/stream")
+    assert res_stream_unauth.status_code == 401
+
+    res_stream_auth = client.get(f"/api/dashboard/stream?token={token}&max_events=1")
+    assert res_stream_auth.status_code == 200
+    assert "data:" in res_stream_auth.text
+
 
 # Test 4 (Rate Limiting Anti-DDoS)
-def test_04_rate_limiting_anti_ddos_slowapi():
+def test_04_rate_limiting_anti_ddos_slowapi(monkeypatch):
     """Test 4: Simulates a burst to POST /api/chat exceeding 10 req/min, verifying HTTP 429."""
+    from unittest.mock import MagicMock
+    dummy_res = MagicMock()
+    dummy_res.model_dump.return_value = {"reply": "OK", "channel": "web", "sender_id": "rate_limit_test_user"}
+    monkeypatch.setattr("app.agents.coordinator.process_incoming_message", lambda **kwargs: dummy_res)
+
     prev_enabled = app.state.limiter.enabled
     app.state.limiter.enabled = True
     try:
@@ -181,6 +194,18 @@ def test_05_cors_and_security_http_headers(monkeypatch):
     assert "max-age=" in headers["strict-transport-security"]
     assert "content-security-policy" in headers
     assert "frame-ancestors 'none'" in headers["content-security-policy"]
+
+    # Strict CSP on API endpoints (zero unsafe-eval)
+    res_api = client.get("/api/appointments")
+    api_csp = res_api.headers.get("content-security-policy", "")
+    assert "default-src 'none'" in api_csp
+    assert "'unsafe-eval'" not in api_csp
+    assert "frame-ancestors 'none'" in api_csp
+
+    # Documentation Swagger UI CSP allows CDN scripts
+    res_docs = client.get("/docs")
+    docs_csp = res_docs.headers.get("content-security-policy", "")
+    assert "cdn.jsdelivr.net" in docs_csp
 
     # CORS enforcement in production mode
     monkeypatch.setenv("ENVIRONMENT", "production")

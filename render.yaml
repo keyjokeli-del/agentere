@@ -61,6 +61,16 @@ services:
         sync: false
       - key: YOUTUBE_CHANNEL_ID
         value: "UCd-Jfy2X6R7TOMy8lpmHaMg"
+      - key: DATABASE_URL
+        sync: false
+      - key: NEON_DATABASE_URL
+        sync: false
+      - key: INTERNAL_WEBHOOK_SECRET
+        value: "lumina_internal_secret_2026"
+      - key: DATA_ENCRYPTION_KEY
+        value: "ZebUNHJ0EW2On9z7ggBVGeAfagoXAxU53kKc0gr6Wb4="
+      - key: JWT_SECRET
+        value: "lumina_clinic_jwt_secret_enterprise_2026"
 
   # ----------------------------------------------------------------------------
   # 2. Microservicio de WhatsApp: Baileys + Neon Postgres
@@ -87,5 +97,7 @@ services:
         value: lumina_dental_session
       - key: PYTHON_BACKEND_URL
         value: https://lumina-backend-rti9.onrender.com/api/webhooks/whatsapp
+      - key: INTERNAL_WEBHOOK_SECRET
+        value: "lumina_internal_secret_2026"
       - key: NODE_OPTIONS
         value: "--max-old-space-size=256"
