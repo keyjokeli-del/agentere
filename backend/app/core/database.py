@@ -13,7 +13,7 @@ from app.services.embedding_service import embedding_service
 # AES-256 / Fernet Encryption at Rest (Mejora 6)
 # ==============================================================================
 def get_fernet_cipher() -> Fernet:
-    key_src = os.getenv("DATA_ENCRYPTION_KEY") or os.getenv("JWT_SECRET", "lumina_clinic_default_vault_secret_2026")
+    key_src = os.getenv("DATA_ENCRYPTION_KEY") or os.getenv("JWT_SECRET") or "lumina_clinic_default_vault_secret_2026"
     key_32 = hashlib.sha256(key_src.encode("utf-8")).digest()
     fernet_key = base64.urlsafe_b64encode(key_32)
     return Fernet(fernet_key)
@@ -577,7 +577,7 @@ class DatabaseManager:
                             for r in cur.fetchall():
                                 sid = str(r[0])
                                 if sid not in patient_memories:
-                                    patient_memories[sid] = decrypt_field(r[1])
+                                    patient_memories[sid] = decrypt_field(r[1]) or ""
                         except Exception:
                             pass
 

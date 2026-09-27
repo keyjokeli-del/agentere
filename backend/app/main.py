@@ -87,25 +87,21 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 # Register Social Gateways (Meta, YouTube, Telegram)
 app.include_router(meta_router)
 app.include_router(youtube_router)
 app.include_router(telegram_router)
 
-# Strict CORS Allowlist (Mejora 8)
+# Strict CORS Allowlist (Mejora 8 - OWASP Top 10 API Security)
 CORS_ORIGINS = [
     "https://lumina-dental-nairoby-dominguez.vercel.app",
     "https://luminadentalstudio.com",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
 ]
-if os.getenv("ENVIRONMENT") != "production":
-    CORS_ORIGINS.extend([
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:8000",
-        "*"
-    ])
 
 app.add_middleware(
     CORSMiddleware,

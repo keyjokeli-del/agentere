@@ -8,11 +8,11 @@ from app.services.groq_service import GroqService
 PROMPT_INJECTION_PATTERNS = [
     r"(?i)\b(ignore|disregard|forget|omit)\b.*?\b(previous|all|prior|above)\b.*?\b(instructions|rules|prompts|commands)\b",
     r"(?i)\b(olvida|ignora|desobedece|salta)\b.*?\b(todas|las|instrucciones|reglas|previas)\b",
-    r"(?i)\b(system prompt|system message|reveal prompt|act as dan|dan mode|jailbreak)\b",
+    r"(?i)\b(system prompt|system message|reveal prompt|act as dan|dan mode|jailbreak|system override)\b",
     r"(?i)\b(eres ahora|actúa como|you are now|pretend you are)\b.*?\b(dan|sin restricciones|no limits|sin límites|unfiltered|evil|hacker|pirata)\b",
-    r"(?i)\b(override|bypass)\b.*?\b(security|safety|guardrails|guidelines)\b",
-    r"(?i)\b(repeat|print|reveal|show|dump)\b.*?\b(verbatim|text above|all text|api key|secret)\b",
-    r"(?i)\b(rec[eé]tame|prescribe me)\b.*?\b(tramadol|morfina|fentanilo|oxicodona|clonazepam|diazepan)\b",
+    r"(?i)\b(override|bypass)\b.*?\b(security|safety|guardrails|guidelines|system)\b",
+    r"(?i)\b(repeat|print|reveal|show|dump|revela|muestra)\b.*?\b(verbatim|text above|all text|api key|secret|variables de entorno|env vars)\b",
+    r"(?i)\b(rec[eé]tame|prescribe me|ind[ií]came)\b.*?\b(tramadol|morfina|fentanilo|oxicodona|clonazepam|diazepan|amoxicilina|antibi[oó]tico)\b",
 ]
 
 
