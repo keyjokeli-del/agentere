@@ -73,14 +73,33 @@ class RuntimeCleanupManager:
 
         return removed_count
 
+    def purge_expired_conversations(self, days: int = 90) -> int:
+        """Purges conversation turns older than 90 days from Neon DB for data retention compliance (Mejora 14)."""
+        conn = db_manager.get_connection()
+        if not conn:
+            return 0
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM conversation_turns WHERE created_at < NOW() - (INTERVAL '1 day' * %s);",
+                        (days,)
+                    )
+                    return cur.rowcount or 0
+        except Exception:
+            return 0
+        finally:
+            conn.close()
+
     def perform_cleanup(self, force: bool = False) -> Dict[str, Any]:
-        """Executes pruning, temp file purge, and garbage collection."""
+        """Executes pruning, temp file purge, 90-day retention purge, and garbage collection."""
         now = time.time()
         if not force and (now - self.last_cleanup_timestamp < self.cleanup_interval_sec):
             return {"status": "skipped_interval", "seconds_since_last": int(now - self.last_cleanup_timestamp)}
 
         pruned_stats = self.prune_in_memory_caches()
         temp_removed = self.purge_temp_files()
+        expired_purged = self.purge_expired_conversations(days=90)
         collected = gc.collect()
 
         self.last_cleanup_timestamp = now
@@ -88,6 +107,7 @@ class RuntimeCleanupManager:
             "status": "completed",
             "pruned_stats": pruned_stats,
             "temp_files_removed": temp_removed,
+            "expired_turns_purged": expired_purged,
             "gc_objects_collected": collected,
             "timestamp": now
         }

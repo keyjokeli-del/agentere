@@ -1,6 +1,6 @@
 import re
 from typing import List, Dict, Any, Optional
-from app.core.database import db_manager, DatabaseManager
+from app.core.database import db_manager, DatabaseManager, decrypt_field
 from app.services.embedding_service import embedding_service, EmbeddingService
 
 
@@ -98,7 +98,7 @@ class AnalyzerMemory:
                                 {
                                     "sender_id": sender_id,
                                     "patient_name": r[0],
-                                    "memory_text": r[1],
+                                    "memory_text": decrypt_field(r[1]),
                                     "similarity": round(float(r[2]), 4) if r[2] is not None else 0.0
                                 }
                                 for r in rows

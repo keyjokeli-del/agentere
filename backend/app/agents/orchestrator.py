@@ -77,6 +77,18 @@ class OmniChannelPipeline:
                 timestamp=datetime.now(timezone.utc).isoformat()
             )
 
+        # 0.1 Prompt Injection Shield (Mejora 9)
+        if getattr(message, "is_prompt_injection", False):
+            return SolverResponse(
+                reply="⚠️ Por motivos de seguridad y normativas clínicas éticas, el sistema no procesa comandos de alteración de configuración o instrucciones no asistenciales. ¿En qué tratamiento dental podemos ayudarte hoy?",
+                channel=message.channel,
+                sender_id=message.sender_id,
+                intent="SECURITY_BLOCKED",
+                agent="SecurityShieldAgent",
+                action_taken="blocked_prompt_injection",
+                timestamp=datetime.now(timezone.utc).isoformat()
+            )
+
         session_id = f"{message.channel}:{message.sender_id}"
         history = self.get_or_create_session(session_id)
 
@@ -169,12 +181,37 @@ pipeline = OmniChannelPipeline()
 coordinator = pipeline
 DentalAgentCoordinator = OmniChannelPipeline
 
+
+def run_turn(
+    user_message: str,
+    sender_id: str = "test-user",
+    channel: str = "web",
+    sender_name: str = "Paciente"
+) -> Dict[str, Any]:
+    """Single-turn helper processing message through the 3-agent pipeline."""
+    res = coordinator.process_incoming_message(
+        message=user_message,
+        sender_id=sender_id,
+        channel=channel,
+        sender_name=sender_name
+    )
+    return {
+        "reply": res.reply,
+        "intent": res.intent,
+        "agent": res.agent,
+        "channel": res.channel,
+        "sender_id": res.sender_id,
+        "triage": {"intent": res.intent}
+    }
+
+
 __all__ = [
     "OmniChannelPipeline",
     "TriageAgent",
     "pipeline",
     "coordinator",
     "DentalAgentCoordinator",
+    "run_turn",
     "ReaderAgent",
     "AnalyzerAgent",
     "SolverAgent",

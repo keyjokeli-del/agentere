@@ -138,8 +138,9 @@ def test_fastapi_calendar_endpoints_and_conflict_http_status():
     assert res_duplicate.status_code == 409
     assert "no está disponible" in res_duplicate.json()["detail"]
 
-    # 4. List appointments
-    res_list = client.get("/api/appointments")
+    # 4. List appointments (requires admin authorization)
+    headers = {"X-Admin-Key": "lumina_admin_2026"}
+    res_list = client.get("/api/appointments", headers=headers)
     assert res_list.status_code == 200
     appts = res_list.json()
     assert any(a["patient_name"] == "Valeria Castro" for a in appts)

@@ -25,6 +25,14 @@
           "value": "strict-origin-when-cross-origin"
         },
         {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://lumina-backend-rti9.onrender.com https://lumina-whatsapp.onrender.com https://api.iconify.design; frame-ancestors 'none';"
+        },
+        {
           "key": "Permissions-Policy",
           "value": "camera=(), microphone=(), geolocation=()"
         }

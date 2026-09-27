@@ -1,4 +1,5 @@
 import os
+import re
 import json
 from typing import Dict, Any, List, Optional
 from datetime import datetime, date, timedelta, timezone
@@ -21,6 +22,17 @@ from app.agents.solver_agent.schemas import (
     TriageResult
 )
 from app.agents.solver_agent.memory import SolverMemory
+
+
+def sanitize_outgoing_reply(text: str) -> str:
+    """Sanitizes outgoing assistant text to neutralize HTML injection/XSS payloads (Mejora 17)."""
+    if not text:
+        return text
+    clean = re.sub(r'<\s*(script|iframe|object|embed|svg|link|meta|style|form|input)[^>]*>.*?<\s*/\s*\1\s*>', '', text, flags=re.IGNORECASE | re.DOTALL)
+    clean = re.sub(r'<\s*(script|iframe|object|embed|svg|link|meta|style|form|input|img)[^>]*>', '', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'(?i)javascript:\s*', '', clean)
+    clean = re.sub(r'(?i)on\w+\s*=', '', clean)
+    return clean
 
 # Load and validate clinic knowledge base with Pydantic
 DATA_FILE = settings.BASE_DIR / "app" / "data" / "clinic_info.json"
@@ -404,6 +416,9 @@ class SolverAgent:
                 f"(atendemos de Lunes a Sábado de {settings.business_hours_start}:00 a {settings.business_hours_end}:00).\n\n"
                 f"{reply_text}"
             )
+
+        # Sanitize HTML / XSS payloads (Mejora 17)
+        reply_text = sanitize_outgoing_reply(reply_text)
 
         # 5. Log conversation turns in short-term memory
         self.memory.add_turn(channel=channel, sender_id=sender_id, role="user", content=user_text)

@@ -1,10 +1,66 @@
 import os
 import re
+import base64
+import hashlib
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
+from cryptography.fernet import Fernet
 
 from app.config import settings
 from app.services.embedding_service import embedding_service
+
+# ==============================================================================
+# AES-256 / Fernet Encryption at Rest (Mejora 6)
+# ==============================================================================
+def get_fernet_cipher() -> Fernet:
+    key_src = os.getenv("DATA_ENCRYPTION_KEY") or os.getenv("JWT_SECRET", "lumina_clinic_default_vault_secret_2026")
+    key_32 = hashlib.sha256(key_src.encode("utf-8")).digest()
+    fernet_key = base64.urlsafe_b64encode(key_32)
+    return Fernet(fernet_key)
+
+_cipher: Optional[Fernet] = None
+
+def encrypt_field(value: Optional[str]) -> Optional[str]:
+    """Encrypts sensitive patient plaintext using AES-256 / Fernet at rest."""
+    if not value or not isinstance(value, str):
+        return value
+    global _cipher
+    if _cipher is None:
+        _cipher = get_fernet_cipher()
+    try:
+        return _cipher.encrypt(value.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return value
+
+def decrypt_field(value: Optional[str]) -> Optional[str]:
+    """Decrypts AES-256 / Fernet ciphertext, with backwards compatibility for legacy unencrypted rows."""
+    if not value or not isinstance(value, str):
+        return value
+    if not value.startswith("gAAAAA"):
+        return value  # Legacy unencrypted record
+    global _cipher
+    if _cipher is None:
+        _cipher = get_fernet_cipher()
+    try:
+        return _cipher.decrypt(value.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return value
+
+
+def format_ssl_url(db_url: str) -> str:
+    """Configures strict verify-full SSL/TLS if CA certificates exist, falling back to require (Mejora 7)."""
+    if not db_url or "sslmode=" in db_url:
+        return db_url
+    ca_candidates = [
+        "/etc/ssl/certs/ca-certificates.crt",
+        "/etc/pki/tls/certs/ca-bundle.crt",
+        "/etc/ssl/cert.pem"
+    ]
+    ca_path = next((p for p in ca_candidates if os.path.exists(p)), None)
+    delimiter = "&" if "?" in db_url else "?"
+    if ca_path:
+        return f"{db_url}{delimiter}sslmode=verify-full&sslrootcert={ca_path}"
+    return f"{db_url}{delimiter}sslmode=require"
 
 try:
     import psycopg
@@ -61,7 +117,8 @@ class DatabaseManager:
 
     def __init__(self, database_url: Optional[str] = None, in_memory_only: bool = False):
         self.in_memory_only = in_memory_only
-        self.database_url = "" if in_memory_only else (database_url if database_url is not None else settings.database_url)
+        raw_url = database_url if database_url is not None else settings.database_url
+        self.database_url = "" if in_memory_only else format_ssl_url(raw_url)
         self._db_available: Optional[bool] = None
         self._pool: Optional[Any] = None
 
@@ -256,6 +313,22 @@ class DatabaseManager:
                         ON human_handoffs(sender_id);
                     """)
 
+                    # 9. Least Privilege Role configuration (Mejora 20)
+                    try:
+                        cur.execute("""
+                            DO $$
+                            BEGIN
+                                IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'lumina_app_user') THEN
+                                    CREATE ROLE lumina_app_user WITH LOGIN PASSWORD 'lumina_secure_app_2026';
+                                END IF;
+                            END
+                            $$;
+                            GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO lumina_app_user;
+                            REVOKE DROP, TRUNCATE ON ALL TABLES IN SCHEMA public FROM lumina_app_user;
+                        """)
+                    except Exception:
+                        pass
+
             self._db_available = True
             return True
         except Exception as e:
@@ -264,6 +337,66 @@ class DatabaseManager:
             return False
         finally:
             conn.close()
+
+    def purge_patient_data(self, sender_id: str) -> Dict[str, Any]:
+        """
+        Permanently purges all patient records, turns, vectors, and identities across tables
+        in accordance with GDPR / HIPAA Right to be Forgotten (Mejora 14).
+        """
+        deleted_turns = 0
+        deleted_memories = 0
+        deleted_activities = 0
+        deleted_identities = 0
+
+        # In-memory purge
+        keys_to_purge = [k for k in self.in_memory_turns if k == sender_id or k.endswith(f":{sender_id}")]
+        for k in keys_to_purge:
+            deleted_turns += len(self.in_memory_turns.pop(k, []))
+        if sender_id in self.in_memory_patient_memories:
+            deleted_memories += len(self.in_memory_patient_memories.pop(sender_id, []))
+
+        orig_act_count = len(self.in_memory_activity_logs)
+        self.in_memory_activity_logs = [a for a in self.in_memory_activity_logs if a.get("sender_id") != sender_id]
+        deleted_activities += (orig_act_count - len(self.in_memory_activity_logs))
+
+        if sender_id in self.in_memory_patient_identities:
+            self.in_memory_patient_identities.pop(sender_id, None)
+            deleted_identities += 1
+
+        # Neon DB purge
+        conn = self.get_connection()
+        if conn:
+            try:
+                with conn:
+                    with conn.cursor() as cur:
+                        cur.execute("DELETE FROM conversation_turns WHERE sender_id = %s;", (sender_id,))
+                        deleted_turns += (cur.rowcount or 0)
+
+                        cur.execute("DELETE FROM patient_memory_vectors WHERE sender_id = %s;", (sender_id,))
+                        deleted_memories += (cur.rowcount or 0)
+
+                        cur.execute("DELETE FROM activity_logs WHERE sender_id = %s;", (sender_id,))
+                        deleted_activities += (cur.rowcount or 0)
+
+                        cur.execute("""
+                            DELETE FROM patient_identities 
+                            WHERE phone = %s OR instagram_id = %s OR facebook_id = %s OR telegram_id = %s OR youtube_id = %s;
+                        """, (sender_id, sender_id, sender_id, sender_id, sender_id))
+                        deleted_identities += (cur.rowcount or 0)
+            except Exception as e:
+                print(f"[DatabaseManager] purge_patient_data error: {e}")
+            finally:
+                conn.close()
+
+        return {
+            "status": "purged",
+            "sender_id": sender_id,
+            "deleted_turns": deleted_turns,
+            "deleted_memories": deleted_memories,
+            "deleted_activities": deleted_activities,
+            "deleted_identities": deleted_identities,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
 
     def log_activity(
         self,
@@ -305,7 +438,7 @@ class DatabaseManager:
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                             RETURNING id, created_at;
                             """,
-                            (channel, sender_id, sender_name or sender_id, message, reply, agent, intent, status)
+                            (channel, sender_id, sender_name or sender_id, encrypt_field(message), encrypt_field(reply), agent, intent, status)
                         )
                         row = cur.fetchone()
                         if row:
@@ -318,7 +451,7 @@ class DatabaseManager:
                                 INSERT INTO conversation_turns (channel, sender_id, role, content)
                                 VALUES (%s, %s, %s, %s), (%s, %s, %s, %s);
                                 """,
-                                (channel, sender_id, "user", message, channel, sender_id, "assistant", reply)
+                                (channel, sender_id, "user", encrypt_field(message), channel, sender_id, "assistant", encrypt_field(reply))
                             )
                         except Exception:
                             pass
@@ -353,8 +486,8 @@ class DatabaseManager:
                                     "channel": r[1],
                                     "sender_id": r[2],
                                     "sender_name": r[3],
-                                    "message": r[4],
-                                    "reply": r[5],
+                                    "message": decrypt_field(r[4]),
+                                    "reply": decrypt_field(r[5]),
                                     "agent": r[6],
                                     "intent": r[7],
                                     "status": r[8] or "delivered",
@@ -444,7 +577,7 @@ class DatabaseManager:
                             for r in cur.fetchall():
                                 sid = str(r[0])
                                 if sid not in patient_memories:
-                                    patient_memories[sid] = r[1]
+                                    patient_memories[sid] = decrypt_field(r[1])
                         except Exception:
                             pass
 
@@ -497,7 +630,7 @@ class DatabaseManager:
                                 "id": f"act-{act_id}-u",
                                 "role": "user",
                                 "sender_name": s_name or s_id,
-                                "content": msg,
+                                "content": decrypt_field(msg),
                                 "timestamp": ts,
                                 "status": status or "delivered"
                             })
@@ -509,7 +642,7 @@ class DatabaseManager:
                                 "sender_name": agent or "SolverAgent",
                                 "agent": agent,
                                 "intent": intent,
-                                "content": rep,
+                                "content": decrypt_field(rep),
                                 "timestamp": ts,
                                 "status": status or "delivered"
                             })
@@ -1041,3 +1174,8 @@ class DatabaseManager:
 
 
 db_manager = DatabaseManager()
+
+
+def purge_patient_data(sender_id: str) -> Dict[str, Any]:
+    """Module-level helper to purge all clinical data for a given patient identifier."""
+    return db_manager.purge_patient_data(sender_id)

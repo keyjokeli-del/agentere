@@ -42,9 +42,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Copy pre-built virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv
 
-# Create unprivileged system user for security
-RUN groupadd -g 10001 appgroup && \
-    useradd -u 10001 -g appgroup -m -s /sbin/nologin appuser
+# Install ca-certificates for secure external TLS validation and create unprivileged system user
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -g 10001 appgroup \
+    && useradd -u 10001 -g appgroup -m -s /sbin/nologin appuser
 
 # Copy backend source code
 COPY --chown=appuser:appgroup . /app

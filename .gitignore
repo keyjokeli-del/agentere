@@ -31,7 +31,12 @@ auth_info_baileys/
 whatsapp-service/auth_info_baileys/
 credentials.json
 backend/credentials.json
+*credentials*.json
 *.json.key
+*.pem
+*.key
+*.token
+*.crt
 
 # Logs, Temp Files & OS Artifacts
 *.log

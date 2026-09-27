@@ -115,7 +115,9 @@ const CLINICAL_ASSETS = [
 ];
 
 export default function Dashboard() {
-  const ADMIN_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN || '2026';
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+  const WA_SERVICE_URL = process.env.NEXT_PUBLIC_WHATSAPP_URL || 'http://localhost:3001';
+
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [enteredPin, setEnteredPin] = useState<string>('');
@@ -131,6 +133,22 @@ export default function Dashboard() {
   const [selectedChannelInbox, setSelectedChannelInbox] = useState<string | null>(null);
   const [isSyncingYouTube, setIsSyncingYouTube] = useState<boolean>(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
+  const getAuthHeaders = useCallback((extraHeaders: Record<string, string> = {}) => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...extraHeaders
+    };
+    if (typeof window !== 'undefined') {
+      const token = sessionStorage.getItem('lumina_jwt_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const adminKey = sessionStorage.getItem('lumina_admin_key') || 'lumina_admin_2026';
+      headers['X-Admin-Key'] = adminKey;
+    }
+    return headers;
+  }, []);
 
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? sessionStorage.getItem('lumina_dashboard_auth') : null;
@@ -158,45 +176,51 @@ export default function Dashboard() {
     if (!pin) return;
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/admin/verify-pin`, {
+      const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ pin })
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.valid) {
+        if (data.token) {
           setIsAuthenticated(true);
           if (typeof window !== 'undefined') {
             sessionStorage.setItem('lumina_dashboard_auth', 'true');
-            if (data.admin_key) {
-              sessionStorage.setItem('lumina_admin_key', data.admin_key);
-            }
+            sessionStorage.setItem('lumina_jwt_token', data.token);
+            sessionStorage.setItem('lumina_admin_key', 'lumina_admin_2026');
           }
           setPinError('');
           return;
         }
+      } else if (res.status === 429) {
+        const errData = await res.json().catch(() => ({}));
+        setPinError(errData.detail || 'Demasiados intentos fallidos. Bloqueo temporal por seguridad clínica (OWASP Anti-Brute-Force).');
+        setEnteredPin('');
+        return;
       }
       setPinError('PIN de seguridad clínico incorrecto. Intente nuevamente.');
       setEnteredPin('');
     } catch {
-      // Offline fallback
-      if (pin === ADMIN_PIN) {
-        setIsAuthenticated(true);
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem('lumina_dashboard_auth', 'true');
-        }
-        setPinError('');
-      } else {
-        setPinError('Error de conexión o PIN incorrecto.');
-        setEnteredPin('');
-      }
+      setPinError('Error de conexión con el servidor de autenticación.');
+      setEnteredPin('');
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch(`${BACKEND_URL}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+    } catch {
+      // ignore network errors
+    }
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('lumina_dashboard_auth');
+      sessionStorage.removeItem('lumina_jwt_token');
+      sessionStorage.removeItem('lumina_admin_key');
     }
     setIsAuthenticated(false);
     setEnteredPin('');
@@ -246,12 +270,10 @@ export default function Dashboard() {
     }
   ]);
 
-  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-  const WA_SERVICE_URL = process.env.NEXT_PUBLIC_WHATSAPP_URL || 'http://localhost:3001';
-
   // 1. Fetch Backend Data
   const fetchBackendData = useCallback(async () => {
     try {
+      const authHeaders = getAuthHeaders();
       const healthRes = await fetch(`${BACKEND_URL}/`);
       if (healthRes.ok) {
         const healthData = await healthRes.json();
@@ -261,13 +283,19 @@ export default function Dashboard() {
         setBackendOnline(false);
       }
 
-      const apptRes = await fetch(`${BACKEND_URL}/api/appointments`);
+      const apptRes = await fetch(`${BACKEND_URL}/api/appointments`, {
+        headers: authHeaders,
+        credentials: 'include'
+      });
       if (apptRes.ok) {
         const apptData = await apptRes.json();
         setAppointments(apptData || []);
       }
 
-      const summaryRes = await fetch(`${BACKEND_URL}/api/dashboard/summary`);
+      const summaryRes = await fetch(`${BACKEND_URL}/api/dashboard/summary`, {
+        headers: authHeaders,
+        credentials: 'include'
+      });
       if (summaryRes.ok) {
         const summaryData = await summaryRes.json();
         setActivities(summaryData.recent_activities || []);
@@ -277,7 +305,10 @@ export default function Dashboard() {
       }
 
       try {
-        const inboxRes = await fetch(`${BACKEND_URL}/api/dashboard/channels-inbox`);
+        const inboxRes = await fetch(`${BACKEND_URL}/api/dashboard/channels-inbox`, {
+          headers: authHeaders,
+          credentials: 'include'
+        });
         if (inboxRes.ok) {
           const inboxData = await inboxRes.json();
           setChannelsInbox(inboxData || {});
@@ -288,14 +319,17 @@ export default function Dashboard() {
     } catch {
       setBackendOnline(false);
     }
-  }, [BACKEND_URL]);
+  }, [BACKEND_URL, getAuthHeaders]);
 
   const handleSyncYouTube = async (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setIsSyncingYouTube(true);
     setSyncMessage('Sincronizando comentarios con YouTube Data API v3...');
     try {
-      const res = await fetch(`${BACKEND_URL}/api/youtube/sync?force=true`);
+      const res = await fetch(`${BACKEND_URL}/api/youtube/sync?force=true`, {
+        headers: getAuthHeaders(),
+        credentials: 'include'
+      });
       if (res.ok) {
         const data = await res.json();
         setSyncMessage(`✓ Sincronizado: ${data.processed_new_comments || 0} nuevos comentarios.`);
@@ -399,14 +433,10 @@ export default function Dashboard() {
     setHandoffLoading(senderId);
     try {
       const method = currentStatus ? 'DELETE' : 'POST';
-      const adminKey = (typeof window !== 'undefined' ? sessionStorage.getItem('lumina_admin_key') : null) || 'lumina_admin_2026';
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'X-Admin-Key': adminKey,
-      };
       const reqOptions: RequestInit = {
         method,
-        headers,
+        headers: getAuthHeaders(),
+        credentials: 'include'
       };
       if (method === 'POST') {
         reqOptions.body = JSON.stringify({
@@ -428,11 +458,9 @@ export default function Dashboard() {
 
   const handleExportCsv = async () => {
     try {
-      const adminKey = (typeof window !== 'undefined' ? sessionStorage.getItem('lumina_admin_key') : null) || 'lumina_admin_2026';
       const res = await fetch(`${BACKEND_URL}/api/admin/export-csv`, {
-        headers: {
-          'X-Admin-Key': adminKey,
-        },
+        headers: getAuthHeaders(),
+        credentials: 'include'
       });
       if (!res.ok) throw new Error('Error al generar CSV');
       const blob = await res.blob();

@@ -1,5 +1,5 @@
 from typing import Optional, List, Literal, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 # Re-export domain models from their respective modular agent packages
 from app.agents.reader_agent.schemas import OmniChannelMessage
@@ -37,13 +37,15 @@ class AppointmentRecord(BaseModel):
 
 
 class AppointmentCreateRequest(BaseModel):
-    """Input payload to book an appointment."""
-    patient_name: str = Field(..., min_length=2, description="Nombre del paciente")
-    contact: str = Field(..., description="Teléfono o ID del canal de mensajería")
-    treatment: str = Field(..., description="Tratamiento solicitado")
+    """Input payload to book an appointment with strict Pydantic V2 validation."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    patient_name: str = Field(..., min_length=2, max_length=150, description="Nombre del paciente")
+    contact: str = Field(..., min_length=3, max_length=150, description="Teléfono o ID del canal de mensajería")
+    treatment: str = Field(..., min_length=2, max_length=200, description="Tratamiento solicitado")
     date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$", description="Fecha en formato YYYY-MM-DD")
     time: str = Field(..., pattern=r"^\d{2}:\d{2}$", description="Hora en formato HH:MM")
-    channel: str = Field("whatsapp", description="Canal de procedencia")
+    channel: str = Field("whatsapp", max_length=50, description="Canal de procedencia")
 
 
 class SlotsResponse(BaseModel):

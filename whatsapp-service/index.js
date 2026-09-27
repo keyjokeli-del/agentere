@@ -87,9 +87,13 @@ async function forwardToFastAPI(messageText, sender, senderName, audioBase64 = n
     payload.audio_base64 = audioBase64;
     payload.media_type = 'audio';
   }
+  const internalSecret = process.env.INTERNAL_WEBHOOK_SECRET || 'lumina_internal_secret_2026';
   const response = await fetch(targetUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'X-Internal-Secret': internalSecret
+    },
     body: JSON.stringify(payload)
   });
   if (!response.ok) {

@@ -1,8 +1,35 @@
+import re
 import base64
 from typing import Dict, Any, List, Optional
 from app.agents.reader_agent.schemas import OmniChannelMessage
 from app.agents.reader_agent.memory import ReaderMemory
 from app.services.groq_service import GroqService
+
+PROMPT_INJECTION_PATTERNS = [
+    r"(?i)\b(ignore|disregard|forget|omit)\b.*?\b(previous|all|prior|above)\b.*?\b(instructions|rules|prompts|commands)\b",
+    r"(?i)\b(olvida|ignora|desobedece|salta)\b.*?\b(todas|las|instrucciones|reglas|previas)\b",
+    r"(?i)\b(system prompt|system message|reveal prompt|act as dan|dan mode|jailbreak)\b",
+    r"(?i)\b(eres ahora|actúa como|you are now|pretend you are)\b.*?\b(dan|sin restricciones|no limits|sin límites|unfiltered|evil|hacker|pirata)\b",
+    r"(?i)\b(override|bypass)\b.*?\b(security|safety|guardrails|guidelines)\b",
+    r"(?i)\b(repeat|print|reveal|show|dump)\b.*?\b(verbatim|text above|all text|api key|secret)\b",
+    r"(?i)\b(rec[eé]tame|prescribe me)\b.*?\b(tramadol|morfina|fentanilo|oxicodona|clonazepam|diazepan)\b",
+]
+
+
+def detect_prompt_injection(text: str) -> tuple[str, bool]:
+    """
+    Scans inbound message for adversarial jailbreaks or prompt injections (Mejora 9).
+    Returns (cleaned_text, is_injection).
+    """
+    if not text:
+        return text, False
+    for pat in PROMPT_INJECTION_PATTERNS:
+        if re.search(pat, text):
+            return (
+                "[Intento de Prompt Injection / Jailbreak bloqueado por seguridad del sistema Lumina Dental]",
+                True
+            )
+    return text, False
 
 
 class ReaderAgent:
@@ -18,19 +45,25 @@ class ReaderAgent:
         return self._groq
 
     def read(self, payload: Any, channel: str = "web", default_sender: str = "unknown") -> OmniChannelMessage:
-        """Universal parser dispatching based on detected or specified channel."""
+        """Universal parser dispatching based on detected or specified channel with Prompt Injection defense."""
         if channel == "whatsapp":
-            return self.from_whatsapp(payload if isinstance(payload, dict) else {"message": str(payload)})
+            msg = self.from_whatsapp(payload if isinstance(payload, dict) else {"message": str(payload)})
         elif channel in ("facebook", "instagram"):
-            return self.from_meta(payload if isinstance(payload, dict) else {"message": str(payload)}, channel=channel)
+            msg = self.from_meta(payload if isinstance(payload, dict) else {"message": str(payload)}, channel=channel)
         elif channel == "youtube":
-            return self.from_youtube(payload if isinstance(payload, dict) else {"message": str(payload)})
+            msg = self.from_youtube(payload if isinstance(payload, dict) else {"message": str(payload)})
         elif channel == "telegram":
-            return self.from_telegram(payload if isinstance(payload, dict) else {"message": str(payload)})
+            msg = self.from_telegram(payload if isinstance(payload, dict) else {"message": str(payload)})
         elif isinstance(payload, dict):
-            return self.from_dict(payload, channel=channel, default_sender=default_sender)
+            msg = self.from_dict(payload, channel=channel, default_sender=default_sender)
         else:
-            return self.from_text(str(payload), channel=channel, sender_id=default_sender)
+            msg = self.from_text(str(payload), channel=channel, sender_id=default_sender)
+
+        clean_text, is_inj = detect_prompt_injection(msg.raw_text)
+        if is_inj:
+            msg.raw_text = clean_text
+            msg.is_prompt_injection = True
+        return msg
 
     def from_whatsapp(self, payload: Dict[str, Any]) -> OmniChannelMessage:
         """Parses WhatsApp payloads (Baileys service format), supporting text and voice notes."""
@@ -223,11 +256,13 @@ class ReaderAgent:
         history = payload.get("recent_history")
         if history is None:
             history = self.memory.get_recent_turns(valid_ch, sender_id, limit=4)
+        clean_text, is_inj = detect_prompt_injection(raw_text)
         return OmniChannelMessage(
             channel=valid_ch,  # type: ignore[arg-type]
             sender_id=sender_id,
             sender_name=sender_name,
-            raw_text=raw_text,
+            raw_text=clean_text if is_inj else raw_text,
+            is_prompt_injection=is_inj,
             media_type=payload.get("media_type"),
             metadata=payload.get("metadata", {}),
             recent_history=history
@@ -247,11 +282,14 @@ class ReaderAgent:
         history = recent_history
         if history is None:
             history = self.memory.get_recent_turns(valid_ch, sender_id, limit=4)
+        clean_text, is_inj = detect_prompt_injection(text.strip())
         return OmniChannelMessage(
             channel=valid_ch,  # type: ignore[arg-type]
             sender_id=sender_id,
             sender_name=sender_name,
-            raw_text=text.strip(),
+            raw_text=clean_text if is_inj else text.strip(),
+            is_prompt_injection=is_inj,
             metadata={},
             recent_history=history
         )
+

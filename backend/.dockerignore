@@ -21,6 +21,13 @@ auth_info_baileys/
 .gitignore
 .env
 .env.*
+credentials.json
+*credentials*.json
+*.json.key
+*.pem
+*.key
+*.token
+*.crt
 tests/
 Dockerfile
 .dockerignore

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
-from app.core.database import db_manager, DatabaseManager
+from app.core.database import db_manager, DatabaseManager, encrypt_field
 from app.services.embedding_service import embedding_service, EmbeddingService
 
 
@@ -100,7 +100,7 @@ class SolverMemory:
                         INSERT INTO patient_memory_vectors (sender_id, patient_name, memory_text, embedding)
                         VALUES (%s, %s, %s, %s::vector);
                         """,
-                        (sender_id, patient_name or "Paciente", memory_text, vec_literal)
+                        (sender_id, patient_name or "Paciente", encrypt_field(memory_text), vec_literal)
                     )
         except Exception:
             pass

@@ -1,4 +1,5 @@
 import os
+import time
 import hmac
 import hashlib
 import json
@@ -12,6 +13,27 @@ from app.models.dental_models import SolverResponse
 from app.core.database import db_manager
 
 router = APIRouter(tags=["Meta Social Gateway"])
+
+# In-memory LRU / TTL Anti-Replay Cache (Mejora 4)
+_seen_meta_payloads: Dict[str, float] = {}
+
+
+def check_and_record_replay(raw_body: bytes) -> bool:
+    """
+    Checks if raw_body SHA-256 hash was seen in the last 15 minutes (900 seconds).
+    Returns True if replay attack detected, False otherwise.
+    """
+    payload_hash = hashlib.sha256(raw_body).hexdigest()
+    now = time.time()
+    # Prune expired entries older than 15 minutes
+    expired = [k for k, t in _seen_meta_payloads.items() if now - t > 900]
+    for k in expired:
+        _seen_meta_payloads.pop(k, None)
+
+    if payload_hash in _seen_meta_payloads:
+        return True
+    _seen_meta_payloads[payload_hash] = now
+    return False
 
 
 def verify_meta_signature(raw_body: bytes, signature_header: Optional[str], app_secret: str) -> bool:
@@ -130,6 +152,11 @@ async def meta_webhook_event(
         print("[Meta Gateway] ✅ Firma HMAC-SHA256 verificada exitosamente.")
     else:
         print("[Meta Gateway] Aviso: META_APP_SECRET no configurado, omitiendo validación estricta de firma.")
+
+    # Anti-Replay Attack Check (Mejora 4)
+    if check_and_record_replay(raw_body):
+        print("[Meta Gateway] ❌ Replay Attack detectado: payload idéntico recibido dentro de la ventana TTL de 15 min.")
+        raise HTTPException(status_code=409, detail="Replay attack detected: duplicate webhook payload")
 
     try:
         payload = json.loads(raw_body.decode("utf-8"))
