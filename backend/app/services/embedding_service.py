@@ -4,6 +4,7 @@ import hashlib
 from typing import List, Optional
 import httpx
 from app.config import settings
+from app.core.observability import track_dependency
 
 
 class EmbeddingService:
@@ -25,18 +26,20 @@ class EmbeddingService:
 
         if self.api_key:
             try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={self.api_key}"
+                url = "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent"
+                headers = {"x-goog-api-key": self.api_key}
                 payload = {
                     "model": "models/text-embedding-004",
                     "content": {"parts": [{"text": clean_text[:2048]}]}
                 }
-                with httpx.Client(timeout=6.0) as client:
-                    resp = client.post(url, json=payload)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        vals = data.get("embedding", {}).get("values")
-                        if vals and len(vals) == 768:
-                            return [float(v) for v in vals]
+                with track_dependency("gemini_embedding"):
+                    with httpx.Client(timeout=6.0) as client:
+                        resp = client.post(url, json=payload, headers=headers)
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            vals = data.get("embedding", {}).get("values")
+                            if vals and len(vals) == 768:
+                                return [float(v) for v in vals]
             except Exception:
                 pass
 

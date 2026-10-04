@@ -1,8 +1,10 @@
 import os
 import re
 import json
+import logging
 from typing import List, Dict, Any, Optional
 from app.config import settings
+from app.core.observability import track_dependency, log_event, metrics_tracker
 
 _DEFAULT_API_KEY = object()
 
@@ -19,7 +21,7 @@ class GroqService:
                 from groq import Groq
                 self.client = Groq(api_key=self.api_key)
             except Exception as e:
-                print(f"[GroqService] Advertencia: No se pudo inicializar cliente Groq: {e}")
+                log_event("groq_init_failed", level=logging.WARNING, error=str(e))
 
     def chat_completion(
         self,
@@ -30,6 +32,8 @@ class GroqService:
     ) -> str:
         """Sends conversation history to Groq API with robust rate-limit handling and deterministic fallback."""
         if not self.client:
+            metrics_tracker.record_ai_call(is_fallback=True, reason="no_client")
+            log_event("ai_fallback_used", reason="no_client")
             return self._fallback_response(messages)
 
         try:
@@ -42,17 +46,22 @@ class GroqService:
             if response_format:
                 kwargs["response_format"] = response_format
 
-            chat_completion = self.client.chat.completions.create(**kwargs)
-            content = chat_completion.choices[0].message.content or ""
+            with track_dependency("groq"):
+                chat_completion = self.client.chat.completions.create(**kwargs)
+                content = chat_completion.choices[0].message.content or ""
+
             if not content.strip():
+                metrics_tracker.record_ai_call(is_fallback=True, reason="empty_response")
+                log_event("ai_fallback_used", reason="empty_response")
                 return self._fallback_response(messages)
+
+            metrics_tracker.record_ai_call(is_fallback=False)
             return content
         except Exception as e:
             err_msg = str(e).lower()
-            if "rate_limit" in err_msg or "429" in err_msg:
-                print("[GroqService] ⚠️ Rate limit detectado en capa gratuita de Groq. Conmutando a fallback determinista inmediato.")
-            else:
-                print(f"[GroqService] Error en inferencia Groq ({e}). Conmutando a fallback determinista.")
+            reason = "rate_limit_429" if ("rate_limit" in err_msg or "429" in err_msg) else f"error_{type(e).__name__}"
+            metrics_tracker.record_ai_call(is_fallback=True, reason=reason)
+            log_event("ai_fallback_used", level=logging.WARNING, reason=reason, error=str(e))
             return self._fallback_response(messages)
 
     def transcribe_audio(
@@ -65,15 +74,16 @@ class GroqService:
         if not self.client or not audio_bytes:
             return ""
         try:
-            transcription = self.client.audio.transcriptions.create(
-                file=(filename, audio_bytes),
-                model=model,
-                language="es",
-                response_format="text"
-            )
+            with track_dependency("groq_whisper"):
+                transcription = self.client.audio.transcriptions.create(
+                    file=(filename, audio_bytes),
+                    model=model,
+                    language="es",
+                    response_format="text"
+                )
             return str(transcription).strip()
         except Exception as e:
-            print(f"[GroqService] Transcripción de audio fallida ({e}). Retornando cadena vacía.")
+            log_event("groq_whisper_error", level=logging.WARNING, error=str(e))
             return ""
 
 

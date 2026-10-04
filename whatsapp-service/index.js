@@ -7,6 +7,7 @@ const qrcode = require('qrcode');
 const pino = require('pino');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const {
   default: makeWASocket,
@@ -22,12 +23,28 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Masking helper to protect Patient PHI in Render logs
+function maskJid(jid) {
+  if (!jid || typeof jid !== 'string') return '';
+  const [user, domain] = jid.split('@');
+  if (!user || user.length < 5) return `***@${domain || 's.whatsapp.net'}`;
+  return `${user.slice(0, 4)}****${user.slice(-4)}@${domain || 's.whatsapp.net'}`;
+}
+
+const logger = pino({
+  level: process.env.LOG_LEVEL || 'info',
+  formatters: {
+    level: (label) => ({ level: label.toUpperCase() })
+  },
+  timestamp: pino.stdTimeFunctions.isoTime
+});
+
 // Global safety handlers to prevent process termination on abnormal WebSocket drops (e.g. 1006 / 428)
 process.on('unhandledRejection', (reason) => {
-  console.warn('[Baileys Warning] Unhandled Promise Rejection interceptado:', reason);
+  logger.warn({ event: 'unhandled_rejection', reason: String(reason) }, 'Unhandled Promise Rejection interceptado');
 });
 process.on('uncaughtException', (err) => {
-  console.error('[Baileys Error] Uncaught Exception interceptado:', err.message);
+  logger.error({ event: 'uncaught_exception', error: err.message }, 'Uncaught Exception interceptado');
 });
 
 const PORT = process.env.WHATSAPP_SERVICE_PORT || process.env.PORT || 3001;
@@ -67,7 +84,6 @@ let reconnectAttempts = 0;
 let clearDBSession = null;
 let activeStorageMode = 'local_disk';
 
-const logger = pino({ level: 'warn' });
 const authFolder = path.join(__dirname, 'auth_info_baileys');
 
 function calculateBackoffDelay(attempt) {
@@ -75,9 +91,16 @@ function calculateBackoffDelay(attempt) {
   return Math.min(3000 * Math.pow(2, Math.max(0, attempt - 1)), 30000);
 }
 
-async function forwardToFastAPI(messageText, sender, senderName, audioBase64 = null) {
+async function forwardToFastAPI(messageText, sender, senderName, audioBase64 = null, requestId = null) {
   const targetUrl = getFastApiWebhookUrl();
-  console.log(`[Baileys] Reenviando mensaje a FastAPI en ${targetUrl} (de: ${senderName})`);
+  const reqId = requestId || `wa-${crypto.randomUUID()}`;
+  logger.info({
+    event: 'fastapi_forward',
+    request_id: reqId,
+    sender: maskJid(sender),
+    has_audio: Boolean(audioBase64)
+  }, `Reenviando webhook a FastAPI en ${targetUrl}`);
+
   const payload = {
     message: messageText || (audioBase64 ? '[Audio de WhatsApp]' : ''),
     sender_id: sender,
@@ -92,7 +115,8 @@ async function forwardToFastAPI(messageText, sender, senderName, audioBase64 = n
     method: 'POST',
     headers: { 
       'Content-Type': 'application/json',
-      'X-Internal-Secret': internalSecret
+      'X-Internal-Secret': internalSecret,
+      'X-Request-ID': reqId
     },
     body: JSON.stringify(payload)
   });
@@ -213,18 +237,28 @@ async function startWhatsApp() {
         let audioBase64 = null;
         if (msg.message.audioMessage) {
           try {
-            console.log(`[Baileys] 🎙️ Nota de voz recibida de ${sender}, descargando buffer para transcripción...`);
+            logger.info({
+              event: 'audio_download_start',
+              sender: maskJid(sender)
+            }, 'Nota de voz recibida, descargando buffer para transcripción');
             const buffer = await downloadMediaMessage(msg, 'buffer', {});
             audioBase64 = buffer.toString('base64');
           } catch (mediaErr) {
-            console.warn('[Baileys] Error descargando audio:', mediaErr.message);
+            logger.warn({ event: 'audio_download_error', error: mediaErr.message }, 'Error descargando buffer de audio');
           }
         }
 
         if (!messageText.trim() && !audioBase64) continue;
 
+        const reqId = `wa-${crypto.randomUUID()}`;
         const senderName = msg.pushName || 'Paciente';
-        console.log(`[Baileys] Mensaje recibido de ${senderName} (${sender}): ${messageText || '[Nota de voz]'}`);
+        logger.info({
+          event: 'whatsapp_message_received',
+          request_id: reqId,
+          sender: maskJid(sender),
+          has_audio: Boolean(audioBase64),
+          char_length: (messageText || '').length
+        }, 'Mensaje entrante de WhatsApp recibido');
 
         // Typing indicator (Mejora 15)
         try {
@@ -232,23 +266,31 @@ async function startWhatsApp() {
         } catch (presErr) {}
 
         try {
-          // Forward to Python Backend Agent
-          const data = await forwardToFastAPI(messageText, sender, senderName, audioBase64);
+          // Forward to Python Backend Agent with correlation ID
+          const data = await forwardToFastAPI(messageText, sender, senderName, audioBase64, reqId);
           if (data && data.reply) {
-            console.log(`[Baileys] Enviando respuesta del agente a ${sender}...`);
+            logger.info({
+              event: 'whatsapp_reply_dispatch',
+              request_id: reqId,
+              sender: maskJid(sender)
+            }, 'Enviando respuesta del agente a WhatsApp');
             await sock.sendMessage(sender, { text: data.reply });
           }
         } catch (err) {
-          console.error('[Baileys] Error conectando con el backend de Python:', err.message);
+          logger.error({
+            event: 'whatsapp_fastapi_error',
+            request_id: reqId,
+            error: err.message
+          }, 'Error conectando con el backend de Python');
         }
       }
     });
   } catch (initErr) {
-    console.error('[Baileys] Error durante la inicialización:', initErr.message || initErr);
+    logger.error({ event: 'baileys_init_error', error: initErr.message || initErr }, 'Error durante la inicialización de Baileys');
     connectionStatus = 'disconnected';
     reconnectAttempts++;
     const delay = calculateBackoffDelay(reconnectAttempts);
-    console.log(`[Baileys] Reintentando inicialización en ${delay / 1000}s (intento #${reconnectAttempts})...`);
+    logger.info({ event: 'baileys_reconnect_scheduled', delay_ms: delay, attempt: reconnectAttempts }, 'Reintentando inicialización...');
     setTimeout(startWhatsApp, delay);
   }
 }
@@ -274,6 +316,9 @@ app.get('/api/qr', (req, res) => {
 
 app.post('/api/send', async (req, res) => {
   const { to, message } = req.body || {};
+  const requestId = req.headers['x-request-id'] || `send-${crypto.randomUUID()}`;
+  res.setHeader('X-Request-ID', requestId);
+
   if (!to || !message) {
     return res.status(400).json({ error: 'Faltan parámetros requeridos: "to" y "message"' });
   }
@@ -282,9 +327,19 @@ app.post('/api/send', async (req, res) => {
   }
   try {
     const jid = to.includes('@') ? to : `${to.replace(/\D/g, '')}@s.whatsapp.net`;
+    logger.info({
+      event: 'whatsapp_outbound_send',
+      request_id: requestId,
+      recipient: maskJid(jid)
+    }, 'Enviando mensaje saliente por socket Baileys');
     const result = await sock.sendMessage(jid, { text: message });
     return res.json({ success: true, result });
   } catch (err) {
+    logger.error({
+      event: 'whatsapp_send_error',
+      request_id: requestId,
+      error: err.message
+    }, 'Fallo al enviar mensaje por socket Baileys');
     return res.status(500).json({ error: err.message });
   }
 });

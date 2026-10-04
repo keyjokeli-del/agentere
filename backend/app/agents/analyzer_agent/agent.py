@@ -5,6 +5,7 @@ import httpx
 from typing import Dict, Any, List, Optional, Tuple
 
 from app.config import settings
+from app.core.observability import track_dependency
 from app.services.groq_service import groq_service
 from app.agents.reader_agent.schemas import OmniChannelMessage
 from app.agents.analyzer_agent.schemas import ClinicalAnalysis
@@ -125,7 +126,8 @@ def evaluate_visual_image(metadata: Dict[str, Any]) -> Optional[str]:
     gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if gemini_key and img_b64:
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
+            url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+            headers = {"x-goog-api-key": gemini_key}
             payload = {
                 "contents": [{
                     "parts": [
@@ -147,14 +149,15 @@ def evaluate_visual_image(metadata: Dict[str, Any]) -> Optional[str]:
                 }],
                 "generationConfig": {"temperature": 0.2, "maxOutputTokens": 150}
             }
-            with httpx.Client(timeout=4.0) as client:
-                res = client.post(url, json=payload)
-                if res.is_success:
-                    data = res.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        part = candidates[0].get("content", {}).get("parts", [{}])[0]
-                        return part.get("text", "").strip()
+            with track_dependency("gemini_vision"):
+                with httpx.Client(timeout=4.0) as client:
+                    res = client.post(url, json=payload, headers=headers)
+                    if res.is_success:
+                        data = res.json()
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            part = candidates[0].get("content", {}).get("parts", [{}])[0]
+                            return part.get("text", "").strip()
         except Exception as e:
             print(f"[AnalyzerAgent] Gemini visual assessment advertencia: {e}")
 

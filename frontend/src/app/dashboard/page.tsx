@@ -99,7 +99,7 @@ const CLINICAL_ASSETS = [
     type: 'Emblema 3D (1:1)',
     desc: 'Porcelana translúcida, anillo cian #00E5FF y zafiro.',
     campaign: 'Meta Branding #LuminaDental',
-    leadsGenerated: 18
+    format: '1080 × 1080 px'
   },
   {
     name: 'Portada y Atmósfera Clínica',
@@ -107,7 +107,7 @@ const CLINICAL_ASSETS = [
     type: 'Widescreen (16:9)',
     desc: 'Gabinete odontológico de vanguardia con escáner digital 3D.',
     campaign: 'YouTube Banner #ClinicaVirtual',
-    leadsGenerated: 34
+    format: '1920 × 1080 px'
   },
   {
     name: 'Post Blanqueamiento Láser',
@@ -115,7 +115,7 @@ const CLINICAL_ASSETS = [
     type: 'Social Post (1:1)',
     desc: 'Estética dental avanzada, fotoactivación en frío.',
     campaign: 'Campaña IG Reels #EsteticaDental',
-    leadsGenerated: 49
+    format: '1080 × 1080 px'
   },
   {
     name: 'Post Implantes Guiados 3D',
@@ -123,7 +123,7 @@ const CLINICAL_ASSETS = [
     type: 'Social Post (1:1)',
     desc: 'Cirugía computarizada y fijación ósea milimétrica.',
     campaign: 'Meta Graph #CirugiaGuiada3D',
-    leadsGenerated: 38
+    format: '1080 × 1080 px'
   },
   {
     name: 'Post Guardia & Triage 24/7',
@@ -131,7 +131,7 @@ const CLINICAL_ASSETS = [
     type: 'Social Post (1:1)',
     desc: 'Atención prioritaria inmediata sin esperas.',
     campaign: 'WhatsApp Broadcast #Triage247',
-    leadsGenerated: 62
+    format: '1080 × 1080 px'
   }
 ];
 
@@ -157,11 +157,11 @@ export default function Dashboard() {
   const [isCockpitView, setIsCockpitView] = useState<boolean>(false);
   const [isSimulatorCollapsed, setIsSimulatorCollapsed] = useState<boolean>(false);
   const [kpis, setKpis] = useState({
-    patients_today: 4,
-    appointments_confirmed: 3,
-    urgent_cases: 1,
-    estimated_pipeline_usd: 2450,
-    avg_sla_seconds: 1.1
+    patients_today: 0,
+    appointments_confirmed: 0,
+    urgent_cases: 0,
+    estimated_pipeline_usd: 0,
+    avg_sla_seconds: 0
   });
   const [activeOdontogram, setActiveOdontogram] = useState<{
     isOpen: boolean;
@@ -175,7 +175,7 @@ export default function Dashboard() {
     setPublishingAsset(assetName);
     setTimeout(() => {
       setPublishingAsset(null);
-      setMediaToast(`¡Publicado con éxito en ${network} mediante API v21.0! Píxel de leads activado.`);
+      setMediaToast(`[Demo] Simulación completada: "${assetName}" preparado para ${network}.`);
       setTimeout(() => setMediaToast(null), 4000);
     }, 850);
   };
@@ -1579,7 +1579,7 @@ export default function Dashboard() {
                     ) : (
                       <Share2 className="w-3.5 h-3.5" />
                     )}
-                    <span>Publicar en Feed Meta</span>
+                    <span>(Demo) Publicar en Feed Meta</span>
                   </button>
                 </div>
               </div>
@@ -1592,8 +1592,8 @@ export default function Dashboard() {
                       ✦ Short / Reel Vertical (9:16)
                     </span>
                     <div className="flex items-center gap-1.5">
-                      <span className="px-2 py-0.5 rounded-lg bg-purple-950/80 border border-purple-500/40 text-[10px] font-mono text-purple-300 font-bold">
-                        👥 68 leads generados
+                      <span className="px-2 py-0.5 rounded-lg bg-teal-950/80 border border-teal-500/40 text-[10px] font-mono text-teal-300 font-bold">
+                        📐 1080 × 1920 px (9:16)
                       </span>
                       <span className="px-2.5 py-0.5 rounded-lg bg-teal-400/10 border border-teal-400/30 text-[11px] font-mono text-teal-300 font-bold">
                         3.70 MB
@@ -1638,7 +1638,7 @@ export default function Dashboard() {
                     ) : (
                       <Share2 className="w-3.5 h-3.5" />
                     )}
-                    <span>Publicar en YouTube</span>
+                    <span>(Demo) Publicar en YouTube</span>
                   </button>
                 </div>
               </div>
@@ -1672,7 +1672,7 @@ export default function Dashboard() {
                         {asset.name}
                       </h4>
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
-                        👥 {asset.leadsGenerated} leads
+                        📐 {asset.format}
                       </span>
                     </div>
                     <p className="text-xs text-titanium-400">
@@ -1699,7 +1699,7 @@ export default function Dashboard() {
                         ) : (
                           <Share2 className="w-3 h-3" />
                         )}
-                        <span>Publicar</span>
+                        <span>(Demo) Publicar</span>
                       </button>
                     </div>
                   </div>

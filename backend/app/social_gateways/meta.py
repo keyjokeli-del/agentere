@@ -11,6 +11,7 @@ from app.config import settings
 from app.agents import pipeline
 from app.models.dental_models import SolverResponse
 from app.core.database import db_manager
+from app.core.observability import track_dependency
 
 router = APIRouter(tags=["Meta Social Gateway"])
 
@@ -74,9 +75,10 @@ async def reply_public_instagram_comment(comment_id: str, reply_text: str, acces
     payload = {"message": reply_text}
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            return resp.json() if resp.is_success else {"status": "error", "code": resp.status_code}
+        async with track_dependency("meta_graph"):
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                return resp.json() if resp.is_success else {"status": "error", "code": resp.status_code}
     except Exception as e:
         return {"status": "network_error", "detail": str(e)}
 
@@ -99,19 +101,20 @@ async def dispatch_meta_graph_reply(recipient_id: str, reply_text: str, access_t
     }
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            if resp.is_success:
-                print(f"[Meta Gateway] Respuesta entregada a Meta Graph API para {recipient_id}.")
-                return resp.json()
-            else:
-                # Fallback to Instagram Graph endpoint
-                ig_url = "https://graph.instagram.com/v21.0/me/messages"
-                resp_ig = await client.post(ig_url, json=payload, headers=headers)
-                if resp_ig.is_success:
-                    print(f"[Meta Gateway] Respuesta entregada a Instagram Graph API para {recipient_id}.")
-                    return resp_ig.json()
-                print(f"[Meta Gateway] Advertencia Graph API ({resp.status_code}): {resp.text}")
+        async with track_dependency("meta_graph"):
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                if resp.is_success:
+                    print(f"[Meta Gateway] Respuesta entregada a Meta Graph API para {recipient_id}.")
+                    return resp.json()
+                else:
+                    # Fallback to Instagram Graph endpoint
+                    ig_url = "https://graph.instagram.com/v21.0/me/messages"
+                    resp_ig = await client.post(ig_url, json=payload, headers=headers)
+                    if resp_ig.is_success:
+                        print(f"[Meta Gateway] Respuesta entregada a Instagram Graph API para {recipient_id}.")
+                        return resp_ig.json()
+                    print(f"[Meta Gateway] Advertencia Graph API ({resp.status_code}): {resp.text}")
                 return {"status": "graph_api_error", "code": resp.status_code, "detail": resp.text}
     except Exception as e:
         print(f"[Meta Gateway] Error de conexión con Graph API: {e}")

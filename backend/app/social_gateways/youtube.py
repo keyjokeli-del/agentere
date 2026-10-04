@@ -7,6 +7,7 @@ import httpx
 from app.config import settings
 from app.agents import pipeline
 from app.models.dental_models import SolverResponse
+from app.core.observability import track_dependency
 
 router = APIRouter(tags=["YouTube Social Gateway"])
 
@@ -26,7 +27,8 @@ async def publish_youtube_comment_reply(parent_id: Optional[str], reply_text: st
         print(f"[YouTube Gateway] Advertencia: No se recibió parent_id para responder al comentario.")
         return {"status": "skipped_no_parent_id"}
 
-    url = f"https://www.googleapis.com/youtube/v3/comments?part=snippet&key={api_key}"
+    url = "https://www.googleapis.com/youtube/v3/comments?part=snippet"
+    headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
     payload = {
         "snippet": {
             "parentId": parent_id,
@@ -35,14 +37,15 @@ async def publish_youtube_comment_reply(parent_id: Optional[str], reply_text: st
     }
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(url, json=payload)
-            if resp.is_success:
-                print(f"[YouTube Gateway] Comentario publicado con éxito en el hilo {parent_id}.")
-                return resp.json()
-            else:
-                print(f"[YouTube Gateway] Advertencia YouTube Data API ({resp.status_code}): {resp.text}")
-                return {"status": "youtube_api_error", "code": resp.status_code, "detail": resp.text}
+        async with track_dependency("youtube_api"):
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                if resp.is_success:
+                    print(f"[YouTube Gateway] Comentario publicado con éxito en el hilo {parent_id}.")
+                    return resp.json()
+                else:
+                    print(f"[YouTube Gateway] Advertencia YouTube Data API ({resp.status_code}): {resp.text}")
+                    return {"status": "youtube_api_error", "code": resp.status_code, "detail": resp.text}
     except Exception as e:
         print(f"[YouTube Gateway] Error conectando con YouTube Data API: {e}")
         return {"status": "network_error", "detail": str(e)}
@@ -80,25 +83,26 @@ async def sync_youtube_comments(force: bool = False) -> Dict[str, Any]:
     params = {
         "part": "snippet,replies",
         "allThreadsRelatedToChannelId": channel_id,
-        "key": api_key,
         "maxResults": 20,
         "order": "time"
     }
+    headers = {"x-goog-api-key": api_key}
 
     processed_count = 0
     errors: List[str] = []
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(url, params=params)
+        async with track_dependency("youtube_api"):
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(url, params=params, headers=headers)
 
-            if resp.status_code != 200:
-                print(f"[YouTube Sync] Error consultando commentThreads ({resp.status_code}): {resp.text}")
-                return {
-                    "status": "api_error",
-                    "code": resp.status_code,
-                    "detail": resp.text
-                }
+                if resp.status_code != 200:
+                    print(f"[YouTube Sync] Error consultando commentThreads ({resp.status_code}): {resp.text}")
+                    return {
+                        "status": "api_error",
+                        "code": resp.status_code,
+                        "detail": resp.text
+                    }
 
             data = resp.json()
             items = data.get("items", [])

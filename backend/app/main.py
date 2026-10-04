@@ -17,6 +17,10 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
+import uuid
+import time
+import logging
+
 from app.config import settings
 from app.agents import coordinator, pipeline
 from app.services.calendar_service import (
@@ -38,13 +42,24 @@ from app.core.security import (
     get_client_ip
 )
 from app.core.logging_filter import setup_pii_logging
+from app.core.observability import (
+    request_id_ctx,
+    entry_point_ctx,
+    set_request_context,
+    get_request_id,
+    metrics_tracker,
+    setup_observability_logging,
+    track_dependency,
+    log_event
+)
 from app.models.dental_models import AppointmentRecord, AppointmentCreateRequest, SlotsResponse
 from app.social_gateways.meta import router as meta_router
 from app.social_gateways.youtube import router as youtube_router, sync_youtube_comments_task
 from app.social_gateways.telegram import router as telegram_router
 
-# Setup PII logging filter on startup (Mejora 5)
+# Setup PII logging filter and Observability JSON formatter on startup (Mejora 5 & Observability)
 setup_pii_logging()
+setup_observability_logging()
 
 # Setup SlowAPI rate limiter (Mejora 3)
 limiter = Limiter(
@@ -98,6 +113,7 @@ app.include_router(telegram_router)
 
 # Strict CORS Allowlist (Mejora 8 - OWASP Top 10 API Security)
 CORS_ORIGINS = [
+    "https://agentere.vercel.app",
     "https://lumina-dental-nairoby-dominguez.vercel.app",
     "https://luminadentalstudio.com",
     "http://localhost:3000",
@@ -112,6 +128,70 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+# Correlation ID, Context Propagation & Observability Middleware (Slice 1)
+@app.middleware("http")
+async def correlation_id_and_observability_middleware(request: Request, call_next):
+    # 1. Correlation ID: Extract incoming or generate unique request_id
+    request_id = request.headers.get("X-Request-ID")
+    if not request_id or not request_id.strip():
+        request_id = f"req-{uuid.uuid4().hex[:12]}"
+
+    # 2. Map entry point cleanly
+    path = request.url.path
+    if path == "/api/webhooks/whatsapp":
+        entry_point = "webhook_whatsapp"
+    elif path.startswith("/api/webhooks/meta"):
+        entry_point = "webhook_meta"
+    elif path.startswith("/api/webhooks/youtube"):
+        entry_point = "webhook_youtube"
+    elif path.startswith("/api/webhooks/telegram"):
+        entry_point = "webhook_telegram"
+    elif path == "/api/chat":
+        entry_point = "web_chat"
+    elif path.startswith("/api/dashboard"):
+        entry_point = "dashboard"
+    elif path.startswith("/health"):
+        entry_point = "health"
+    else:
+        entry_point = "api"
+
+    set_request_context(request_id, entry_point)
+    start_time = time.perf_counter()
+
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+    except Exception as exc:
+        status_code = 500
+        duration_ms = (time.perf_counter() - start_time) * 1000.0
+        metrics_tracker.record_request(path, request.method, status_code, duration_ms)
+        log_event(
+            "http_request_error",
+            level=logging.ERROR,
+            method=request.method,
+            path=path,
+            status_code=status_code,
+            duration_ms=round(duration_ms, 2),
+            error=type(exc).__name__
+        )
+        raise exc
+
+    duration_ms = (time.perf_counter() - start_time) * 1000.0
+    metrics_tracker.record_request(path, request.method, status_code, duration_ms)
+    response.headers["X-Request-ID"] = request_id
+
+    # Emit structured completion event
+    log_event(
+        "http_request",
+        method=request.method,
+        path=path,
+        status_code=status_code,
+        duration_ms=round(duration_ms, 2)
+    )
+
+    return response
 
 
 # Security HTTP Headers Middleware (Mejora 16)
@@ -236,6 +316,22 @@ def health_check(background_tasks: BackgroundTasks):
         "rag_memory_configured": bool(db_manager._db_available or db_manager.in_memory_knowledge),
         "channels": ["whatsapp", "facebook", "instagram", "youtube", "telegram", "web"]
     }
+
+
+@app.get("/health/slo", tags=["Observability"])
+def health_slo():
+    """Symptom-based Service Level Objective health check (Slice 3).
+    Public & unauthenticated for cloud monitors (e.g., cron-job.org).
+    Returns 200 OK when healthy, or 503 Service Unavailable when 5xx error rate > 5% in rolling 5m window.
+    No PHI or patient data is ever leaked.
+    """
+    is_healthy, status_data = metrics_tracker.check_slo()
+    status_code = status.HTTP_200_OK if is_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
+    return Response(
+        content=json.dumps(status_data),
+        status_code=status_code,
+        media_type="application/json"
+    )
 
 
 # ==============================================================================
@@ -603,9 +699,19 @@ def dashboard_manual_reply(
     if payload.channel == "whatsapp":
         try:
             wa_url = os.getenv("WHATSAPP_SERVICE_URL", "http://localhost:3001").rstrip("/")
-            httpx.post(f"{wa_url}/api/send", json={"to": payload.sender_id, "message": payload.message}, timeout=3.0)
-        except Exception:
-            pass
+            headers = {
+                "X-Request-ID": get_request_id(),
+                "X-Internal-Secret": os.getenv("INTERNAL_WEBHOOK_SECRET", "lumina_internal_secret_2026")
+            }
+            with track_dependency("whatsapp_bridge"):
+                httpx.post(
+                    f"{wa_url}/api/send",
+                    json={"to": payload.sender_id, "message": payload.message},
+                    headers=headers,
+                    timeout=3.0
+                )
+        except Exception as e:
+            log_event("whatsapp_dispatch_failed", level=logging.WARNING, recipient=payload.sender_id, error=str(e))
 
     # 3. Log activity in database
     act = db_manager.log_activity(
@@ -685,6 +791,12 @@ def dashboard_train_rag(
 def get_dashboard_kpis(_admin: dict = Depends(verify_admin_jwt)):
     """Returns top executive clinical KPIs (Protected)."""
     return db_manager.get_dashboard_kpis()
+
+
+@app.get("/api/admin/metrics", tags=["Observability"])
+def get_admin_metrics(_admin: dict = Depends(verify_admin_jwt)):
+    """Comprehensive RED metrics, latency percentiles, and dependency health (Protected, Slice 3)."""
+    return metrics_tracker.get_summary()
 
 
 @app.post("/api/dashboard/briefing")
@@ -804,9 +916,14 @@ def send_manual_reminder(
     )
     try:
         wa_url = os.getenv("WHATSAPP_SERVICE_URL", "http://localhost:3001").rstrip("/")
-        httpx.post(f"{wa_url}/api/send", json={"to": payload.contact, "message": reminder_msg}, timeout=3.0)
-    except Exception:
-        pass
+        headers = {
+            "X-Request-ID": get_request_id(),
+            "X-Internal-Secret": os.getenv("INTERNAL_WEBHOOK_SECRET", "lumina_internal_secret_2026")
+        }
+        with track_dependency("whatsapp_bridge"):
+            httpx.post(f"{wa_url}/api/send", json={"to": payload.contact, "message": reminder_msg}, headers=headers, timeout=3.0)
+    except Exception as e:
+        log_event("whatsapp_dispatch_failed", level=logging.WARNING, recipient=payload.contact, error=str(e))
 
     db_manager.log_activity(
         channel="whatsapp",
@@ -850,9 +967,14 @@ def invite_waitlist_patient(
     )
     try:
         wa_url = os.getenv("WHATSAPP_SERVICE_URL", "http://localhost:3001").rstrip("/")
-        httpx.post(f"{wa_url}/api/send", json={"to": target["contact"], "message": invite_msg}, timeout=3.0)
-    except Exception:
-        pass
+        headers = {
+            "X-Request-ID": get_request_id(),
+            "X-Internal-Secret": os.getenv("INTERNAL_WEBHOOK_SECRET", "lumina_internal_secret_2026")
+        }
+        with track_dependency("whatsapp_bridge"):
+            httpx.post(f"{wa_url}/api/send", json={"to": target["contact"], "message": invite_msg}, headers=headers, timeout=3.0)
+    except Exception as e:
+        log_event("whatsapp_dispatch_failed", level=logging.WARNING, recipient=target["contact"], error=str(e))
 
     db_manager.log_activity(
         channel="whatsapp",
